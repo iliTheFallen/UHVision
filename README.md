@@ -18,7 +18,7 @@
     You should have received a copy of the GNU General Public License along 
     with licenses for all the 3rd party libraries used in this repository. 
     If not, see <http://www.gnu.org/licenses/>. 
-    Please contact <b>Hien Nguyen V</b> for more info about licensing hvnguy35@central.uh.edu, 
+    Please contact Hien Nguyen V for more info about licensing hvnguy35@central.uh.edu, 
     and other members of the UHVision Lab via github issues section.
 
 <p> This repository includes following libraries: </p>
