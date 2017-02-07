@@ -25,4 +25,4 @@
 
 |  Id  |  Library Name  | Related Paper(s) | Programming Language | Interpreter/Compiler |
 |:----:|:--------------:|:----------------:|:--------------------:|:--------------------:|
-| 1    | MetaLearningTF | <ul><li><a href="https://www.gwern.net/docs/2016-graves.pdf">Meta Learning with Memory-Augmented Neural Networks</a></li></ul>| Python | Python 3.5.2 |
+| 1    | MetaLearningTF | <ul><li><a href="http://jmlr.org/proceedings/papers/v48/santoro16.pdf">Meta Learning with Memory-Augmented Neural Networks</a></li></ul>| Python | Python 3.5.2 |
