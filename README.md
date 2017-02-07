@@ -19,7 +19,7 @@
     with licenses for all the 3rd party libraries used in this repository. 
     If not, see <http://www.gnu.org/licenses/>. 
     Please contact <b>Hien Nguyen V</b> for more info about licensing hvnguy35@central.uh.edu, 
-    and Ilker GURCAN via github issues section.
+    and other members of the UHVision Lab via github issues section.
 
 <p> This repository includes following libraries: </p>
 
