@@ -18,12 +18,11 @@
     You should have received a copy of the GNU General Public License along 
     with licenses for all the 3rd party libraries used in this repository. 
     If not, see <http://www.gnu.org/licenses/>. 
-    Please contact <b>Hien Nguyen V</b> for more info about licensing hvnguy35@central.uh.edu, 
-    and Ilker GURCAN via github issues section.
+    Please contact Hien Nguyen V for more info about licensing hvnguy35@central.uh.edu, 
+    and other members of the UHVision Lab via github issues section.
 
 <p> This repository includes following libraries: </p>
 
 |  Id  |  Library Name  | Related Paper(s) | Programming Language | Interpreter/Compiler |
 |:----:|:--------------:|:----------------:|:--------------------:|:--------------------:|
-| 1    | Differentiable Neural Computer (DNC) | <ul><li><a href="https://www.gwern.net/docs/2016-graves.pdf">Hybrid Computing Using a Neural Network with Dynamic External Memory</a></li><li><a href="https://arxiv.org/pdf/1410.5401v2.pdf">Neural Turing Machine</a></li></ul> | Python               | Python 3.5.2         |
-| 2    | TODO Name | TODO Paper | TODO Language | TODO Int/Comp |
+| 1    | MetaLearningTF | <ul><li><a href="http://jmlr.org/proceedings/papers/v48/santoro16.pdf">Meta Learning with Memory-Augmented Neural Networks</a></li></ul>| Python | Python 3.5.2 |
