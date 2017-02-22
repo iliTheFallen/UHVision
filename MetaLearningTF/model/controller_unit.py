@@ -53,7 +53,7 @@ class ParamMap(object):
 
 class ControllerUnit(object):
 
-    # Tensors for the state of LSTM cell
+    # Tensors for storing state of the Controller
     __c_t = 0  # So called "State of the Cell" C_t
     __h_t = 0  # Output produced by the current Cell h_t
     # Tensors for the hidden layer
@@ -188,7 +188,8 @@ class ControllerUnit(object):
         # *************************************Controller State*************************************
         with tf.variable_scope("cState"):
             # State for the cell
-            self.__c_t = gate_out[G_OUT + str(1)] * cell_tm1 + gate_out[G_OUT + str(0)] * approx_cont
+            self.__c_t = gate_out[G_OUT + str(1)] * cell_tm1 + \
+                         gate_out[G_OUT + str(0)] * approx_cont
             self.__h_t = gate_out[G_OUT+str(2)]*tf.nn.tanh(self.__c_t)
         # *************************************Controller Output Layer*************************************
         with tf.variable_scope('cOut'):

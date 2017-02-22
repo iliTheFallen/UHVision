@@ -47,29 +47,22 @@ def create_one_hot_var(shape, depth, dtype=tf.float32, name=''):
     return one_hot
 
 
-def _restructure_indexing(input_,
-                          indices_list,
+def _restructure_indexing(indices_list,
                           updates):
     '''
 
-    :param input_:
     :param indices_list:
     :param updates:
     :return:
     '''
-    shape_in = input_.get_shape().as_list()
-    p = len(shape_in)
-    l = len(indices_list)
-    if p != l:
-        raise ValueError('Number of dimensions input has, is not equal to '
-                         'the number of index lists!')
-    # Each p-length element in "actual_indices" is an index into a
-    # particular item within "input_"
+    k = len(indices_list)  # Innermost dim of the indices array
+    shape_up = updates.get_shape().as_list()
+    u = len(shape_up)  # Rank of the update matrix
+    # k # of dimensions are required to index "updates" list
+    idx_shape = np.split(np.asarray(shape_up), [k, u])[0].tolist()
+    # Dimension in which index into "input_" is stored
+    idx_shape.append(k)
     actual_indices = tf.stack(indices_list, axis=1)
-    # Now we need to add extra dimensions to our indices list
-    # so that it complies with scatter_nd_* methods
-    idx_shape = updates.get_shape().as_list()
-    idx_shape.append(p)
     actual_indices = tf.reshape(actual_indices, idx_shape)
 
     return actual_indices
@@ -85,7 +78,7 @@ def update_tensor_els(input_,
     :param updates:
     :return:
     '''
-    actual_indices = _restructure_indexing(input_, indices_list, updates)
+    actual_indices = _restructure_indexing(indices_list, updates)
     updated_ten = tf.scatter_nd_update(input_, actual_indices, updates)
 
     return updated_ten
@@ -101,7 +94,7 @@ def inc_tensor_els(input_,
     :param addition:
     :return:
     '''
-    actual_indices = _restructure_indexing(input_, indices_list, addition)
+    actual_indices = _restructure_indexing(indices_list, addition)
     updated_ten = tf.scatter_nd_add(input_, actual_indices, addition)
 
     return updated_ten

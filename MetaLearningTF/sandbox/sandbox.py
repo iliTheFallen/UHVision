@@ -80,6 +80,7 @@ def test_update_tensor_els():
                  [4, 5, 6],
                  [7, 8, 9]]  # Shape=3x3, Rank P=2
     test_data = tf.Variable(test_data, dtype=tf.float32, name="test_data")
+    # Testing update
     d_0_idx = tf.constant([0, 0, 1, 1, 2, 2], dtype=tf.int32, name="d0_idx")
     d_1_idx = tf.constant([0, 2, 0, 2, 0, 2], dtype=tf.int32, name="d1_idx")
     idx_list = [d_0_idx, d_1_idx]
@@ -90,10 +91,21 @@ def test_update_tensor_els():
     updated = tf_utils.update_tensor_els(test_data,
                                          idx_list,
                                          test_updates)
+    # Testing increment
+    d_0_idx = tf.constant([0, 2], dtype=tf.int32, name="d0_idx_inc")
+    # Unspecified dimension should have the same length as does the original data.
+    test_inc = [[-1, -1, -1],
+                [-3, -3, -3]]
+    test_inc = tf.Variable(test_inc, dtype=tf.float32, name="test_increment")
+    increment = tf_utils.inc_tensor_els(test_data,
+                                        [d_0_idx],
+                                        test_inc)
+
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
         sess.run(init)
-        print('Modified Array: \n', sess.run(updated))
+        print('Update-Test Result: \n', sess.run(updated))
+        print('Increment-Test Result: \n', sess.run(increment))
 
 
 if __name__ == "__main__":
