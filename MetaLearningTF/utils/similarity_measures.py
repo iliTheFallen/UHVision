@@ -38,5 +38,5 @@ def cosine_similarity(k_t, m_t):
     norm = tf.sqrt(tf.multiply(
         tf.expand_dims(tf.reduce_sum(tf.multiply(k_t, k_t), 2), 2),   # BSxNRx1
         tf.expand_dims(tf.reduce_sum(tf.multiply(m_t, m_t), 2), 1)))  # BSx1xMS
-    # Element-wise divison
+    # Element-wise division
     return tf.divide(sim, norm)

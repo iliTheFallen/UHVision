@@ -29,24 +29,202 @@
     **********************************************************************************
 '''
 
-import model.controller_unit
-import model.memory
+import math as math
+import tensorflow as tf
+
+from model.controller_unit import ControllerUnit
+from model.memory import MemoryUnit
 
 
 class NNModel(object):
+    # Layers
+    LAYER_NN_OUT = "nnOut"
 
-    __controller_size = 0  # How
+    # Nodes
+    NODE_W_OUT = "w_o"
+    NODE_B_OUT = "b_o"
+
+    # Configuration options
+    __batch_size = 0  # Number of samples fed into network at a particular time t
+    __input_size = 0  # The length of the input vector
     __num_classes = 0  # Number of classes/labels
+    __controller_size = 0  # How many hidden units the RNN cell has
     __memory_size = (0, 0)  # 2D Tuple specifying (numberOfElements)X(sizeOfEachElement)
     __num_read_heads = 0  # Number of read heads attached to controller
+    __learning_rate = 0.0
+    # Two main components that this module tries to fuse one with another
+    __controller = None
+    __memory = None
+    __t = 0
+    # Placeholders
+    __input_ph = None
+    __target_ph = None
 
     def __init__(self,
-                 controller_size,
-                 num_classes,
-                 memory_size,
-                 num_read_heads):
-        self.__controller_size = controller_size
+                 batch_size=16,
+                 input_size=20*20,
+                 num_classes=5,
+                 controller_size=200,
+                 memory_size=(128, 40),
+                 num_read_heads=4,
+                 learning_rate=0.001,
+                 gamma=0.95):
+
+        self.__batch_size = batch_size
+        self.__input_size = input_size
         self.__num_classes = num_classes
+        self.__controller_size = controller_size
         self.__memory_size = memory_size
         self.__num_read_heads = num_read_heads
+        self.__learning_rate = learning_rate
+        # Create main components
+        self.__controller = ControllerUnit(batch_size,
+                                           num_classes,
+                                           input_size,
+                                           controller_size,
+                                           memory_size,
+                                           num_read_heads)
+        self.__memory = MemoryUnit(batch_size,
+                                   memory_size,
+                                   num_read_heads,
+                                   gamma)
+
+    def get_memory(self):
+        return self.__memory
+
+    def build(self, seq_len):
+        '''
+        This method creates variables for components, which will be passed from
+         current step at time t to the next one at time t+1. Moreover, it generates
+         placeholders for feeding neural network.
+        :return:
+        '''
+        self.__controller.build()
+        self.__memory.build()
+        self._create_placeholders(seq_len)
+        print('Creating output weights and bias')
+        num_weights = self.__controller_size+self.__num_read_heads*self.__memory_size[1]
+        with tf.variable_scope(NNModel.LAYER_NN_OUT):
+            tf.Variable(tf.truncated_normal([num_weights, self.__num_classes],
+                                            stddev=1.0/math.sqrt(float(num_weights))),
+                        name=NNModel.NODE_W_OUT)
+            tf.Variable(tf.zeros([self.__num_classes], dtype=tf.float32),
+                        name=NNModel.NODE_B_OUT)
+
+    def _create_placeholders(self, seq_len):
+        '''
+        Generates placeholder variables for feeding dictionary with
+         input tensors.
+
+        :param seq_len: How many times RNN is unrolled. Each sample input
+         will be composed of this many number of samples in order to generate a meaningful
+         output.
+        :return:
+        '''
+        print('Generating placeholders...')
+        self.__input_ph = tf.placeholder(tf.float32,
+                                         shape=(self.__batch_size, self.__input_size))
+        self.__target_ph = tf.placeholder(tf.float32,
+                                          shape=(self.__batch_size, seq_len))
+
+    def prepare_dict(self, input_, target):
+
+        feed_dict = {
+            self.__input_ph: input_,
+            self.__target_ph: target
+        }
+        return feed_dict
+
+    @staticmethod
+    def get_node_out():
+        '''
+        Don't call before building is complete!!!
+
+        :return:
+        '''
+        with tf.variable_scope(NNModel.LAYER_NN_OUT) as out_scope:
+            out_scope.reuse_variables()
+            w_o = tf.get_variable(NNModel.NODE_W_OUT)
+            b_o = tf.get_variable(NNModel.NODE_B_OUT)
+        return w_o, b_o
+
+    def _step(self, recurrent, x_t):
+        '''
+        Called at each time step t to unroll NTM
+
+        :param recurrent: Parameters from the previous step at time t-1
+        :param x_t: Current input at time t
+        :return: [h_t, c_t, r_t, m_t, wr_t, wu_t]
+        '''
+
+        h_tm1, c_tm1, r_tm1, m_tm1, wr_tm1, wu_tm1 = recurrent
+        print('*****************Unrolling NTM at time step: %d*****************' % self.__t)
+        ControllerUnit.inference(x_t, c_tm1, r_tm1, h_tm1)
+        [k_t, a_t, s_t] = ControllerUnit.get_op_out()
+        self.__memory.update_mem(m_tm1, wr_tm1, wu_tm1, s_t, a_t, k_t)
+        # Input to the next step
+        [h_t, c_t] = ControllerUnit.get_op_state()
+        [m_t, r_t, wr_t, wu_t] = self.__memory.get_op_memory()
+        self.__t += 1
+        return [h_t, c_t, r_t, m_t, wr_t, wu_t]
+
+    def train(self, episode):
+
+        seq_len = self.__target_ph.get_shape().as_list()[1]  # Check _create_placeholders method for explanation
+        out_shape = (self.__batch_size*seq_len, self.__num_classes)
+
+        # As discussed in Section-2, previous target (y_tp1) is presented as input
+        # along with the input (x_t) in a temporally offset manner:
+        one_hot_target = tf.one_hot(tf.reshape(self.__target_ph, [-1]), depth=self.__num_classes)
+        one_hot_target = tf.reshape(one_hot_target, (self.__batch_size, seq_len, self.__num_classes))
+        # At t=0, (x_0, null) should be the input to NN
+        null = tf.slice(one_hot_target,
+                        [0, 0, 0],
+                        [self.__batch_size, 1, self.__num_classes])
+        null = tf.zeros_like(null) # BSx1xnum_classes
+        # Remove the last target (label) for it has no matching input like (x_tp1, y_t)
+        wht_last_tar = tf.slice(one_hot_target,
+                                [0, 0, 0],
+                                [self.__batch_size, seq_len - 1, self.__num_classes])
+        offset_target = tf.concat([null, wht_last_tar], axis=1)
+        # Now concatenate input and offset_target along the 3rd dimension
+        act_input_seq = tf.concat([self.__input_ph, offset_target], axis=2)  # BSxSLx(input_size+num_classes)
+
+        print('****************************************************************')
+        # Unroll the network for entire sequence of input
+        self.__t = 0
+        [h_0, c_0] = ControllerUnit.get_op_state()
+        [m_0, r_0, wr_0, wu_0] = self.__memory.get_op_memory()
+        # Recurrent input: [h_t, c_t, r_t, m_t, wr_t, wu_t]
+        nn_output = tf.scan(self._step,
+                            elems=tf.transpose(act_input_seq, perm=[1, 0, 2]),  # SLxBSx(input_size+num_classes)
+                            initializer=[h_0, c_0, r_0, m_0, wr_0, wu_0],
+                            name="scanning_MLTF_NN",
+                            parallel_iterations=0)
+        print('****************************************************************')
+
+        # As for computing output, only h_t & r_t suffice:
+        # h_t = BSxSLxCS / r_t = BSxSLx(NR.MIL)
+        req_output = tf.transpose(tf.concat([nn_output[0], nn_output[2]], axis=2), perm=[1, 0, 2])  # BSxSLx(CS+NR.MIL)
+
+        # Calculate the predictions:
+        [w_o, b_o] = NNModel.get_node_out()
+        preact = tf.add(tf.matmul(req_output, w_o), b_o)
+        logits = tf.nn.softmax(tf.reshape(preact, out_shape))
+
+        # Create loss function using prediction (logits) and actual output (labels)
+        labels = tf.to_int64(self.__target_ph)
+        cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            labels=labels,
+            logits=logits,
+            name="loss"+str(episode))
+        loss = tf.reduce_mean(cross_entropy, name="loss_mean_"+str(episode))
+
+        # Create an AdamOptimizer
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.__learning_rate)
+        global_step = tf.Variable(0, name="global_step", trainable=False)
+        train_op = optimizer.minimize(loss,
+                                      global_step=global_step,
+                                      name="optimizer_"+str(episode))
+        return loss, train_op
 

@@ -3,7 +3,7 @@ import numpy as np
 import os
 import random
 
-from data.images import get_shuffled_images, time_offset_input, load_transform
+from data.images import get_shuffled_images, load_transform
 
 
 class OmniglotGenerator(object):
