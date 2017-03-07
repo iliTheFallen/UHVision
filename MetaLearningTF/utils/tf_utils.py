@@ -45,6 +45,22 @@ def create_one_hot_var(shape, depth, dtype=tf.float32):
     return one_hot
 
 
+def update_var_els(input_,
+                   updates,
+                   indices):
+    '''
+
+    :param input_:
+    :param updates:
+    :param indices:
+    :return:
+    '''
+
+    actual_indices = tf.stack(indices, axis=1)
+    updated_ten = tf.scatter_nd_update(input_, actual_indices, updates)
+    return updated_ten
+
+
 def erase_els(ref,
               eraser,
               input_,

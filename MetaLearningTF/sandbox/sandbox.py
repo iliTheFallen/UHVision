@@ -74,7 +74,7 @@ def test_scatter_nd_add():
         print('Modified Array: \n', sess.run(add))
 
 
-def test_matlab_subscription():
+def test_matlab_subs_up():
 
     with tf.Graph().as_default():
         test_data = [[1, 2, 3],
@@ -86,21 +86,24 @@ def test_matlab_subscription():
         d_1_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d1_idx")
         test_updates = [100, 200, 300] # Shape=3x2(d_0xd_{Q-2}), Rank Q-1+P-K = 2
         test_updates = tf.Variable(test_updates, dtype=tf.float32, name="test_updates")
-        updated = tf_utils.update_tensor_els(test_data,
-                                             test_updates,
-                                             [d_0_idx, d_1_idx])
+        updated = tf_utils.update_var_els(test_data,
+                                          test_updates,
+                                          [d_0_idx, d_1_idx])
         # Testing increment
-        # Unspecified dimension should have the same length as does the original data.
+        # This time your reference will not be affected
+        dummy_ref = tf.Variable(tf.zeros([3, 3], dtype=tf.float32), name="dummy_ref")
         test_inc = [3, 4, 5]
         test_inc = tf.Variable(test_inc, dtype=tf.float32, name="test_increment")
-        increment = tf_utils.inc_tensor_els(test_data,
+        increment = tf_utils.inc_tensor_els(dummy_ref,
                                             test_inc,
+                                            updated,
                                             [d_0_idx, d_1_idx])
         init = tf.global_variables_initializer()
         with tf.Session() as sess:
             sess.run(init)
             print('Update-Test Result: \n', sess.run(updated))
             print('Increment-Test Result: \n', sess.run(increment))
+            print('My reference is the same as before after increment:\n', sess.run(test_data))
 
 
 def test_create_one_hot():
@@ -138,6 +141,6 @@ def test_sorted_indx():
 if __name__ == "__main__":
 
     # test_scatter_nd_add()
-    # test_matlab_subscription()
+    test_matlab_subs_up()
     # test_create_one_hot()
-    test_sorted_indx()
+    # test_sorted_indx()
