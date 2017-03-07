@@ -74,41 +74,70 @@ def test_scatter_nd_add():
         print('Modified Array: \n', sess.run(add))
 
 
-def test_update_tensor_els():
+def test_matlab_subscription():
 
-    test_data = [[1, 2, 3],
-                 [4, 5, 6],
-                 [7, 8, 9]]  # Shape=3x3, Rank P=2
-    test_data = tf.Variable(test_data, dtype=tf.float32, name="test_data")
-    # Testing update
-    d_0_idx = tf.constant([0, 0, 1, 1, 2, 2], dtype=tf.int32, name="d0_idx")
-    d_1_idx = tf.constant([0, 2, 0, 2, 0, 2], dtype=tf.int32, name="d1_idx")
-    idx_list = [d_0_idx, d_1_idx]
-    test_updates = [[-1, -2],
-                    [-2, -1],
-                    [-1, -2]] # Shape=3x2(d_0xd_{Q-2}), Rank Q-1+P-K = 2
-    test_updates = tf.Variable(test_updates, dtype=tf.float32, name="test_updates")
-    updated = tf_utils.update_tensor_els(test_data,
-                                         idx_list,
-                                         test_updates)
-    # Testing increment
-    d_0_idx = tf.constant([0, 2], dtype=tf.int32, name="d0_idx_inc")
-    # Unspecified dimension should have the same length as does the original data.
-    test_inc = [[-1, -1, -1],
-                [-3, -3, -3]]
-    test_inc = tf.Variable(test_inc, dtype=tf.float32, name="test_increment")
-    increment = tf_utils.inc_tensor_els(test_data,
-                                        [d_0_idx],
-                                        test_inc)
+    with tf.Graph().as_default():
+        test_data = [[1, 2, 3],
+                     [4, 5, 6],
+                     [7, 8, 9]]  # Shape=3x3, Rank P=2
+        test_data = tf.Variable(test_data, dtype=tf.float32, name="test_data")
+        # Testing update
+        d_0_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d0_idx")
+        d_1_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d1_idx")
+        test_updates = [100, 200, 300] # Shape=3x2(d_0xd_{Q-2}), Rank Q-1+P-K = 2
+        test_updates = tf.Variable(test_updates, dtype=tf.float32, name="test_updates")
+        updated = tf_utils.update_tensor_els(test_data,
+                                             test_updates,
+                                             [d_0_idx, d_1_idx])
+        # Testing increment
+        # Unspecified dimension should have the same length as does the original data.
+        test_inc = [3, 4, 5]
+        test_inc = tf.Variable(test_inc, dtype=tf.float32, name="test_increment")
+        increment = tf_utils.inc_tensor_els(test_data,
+                                            test_inc,
+                                            [d_0_idx, d_1_idx])
+        init = tf.global_variables_initializer()
+        with tf.Session() as sess:
+            sess.run(init)
+            print('Update-Test Result: \n', sess.run(updated))
+            print('Increment-Test Result: \n', sess.run(increment))
 
+
+def test_create_one_hot():
+
+    one_hot = tf_utils.create_one_hot_var((16, 10), 5)
     init = tf.global_variables_initializer()
     with tf.Session() as sess:
         sess.run(init)
-        print('Update-Test Result: \n', sess.run(updated))
-        print('Increment-Test Result: \n', sess.run(increment))
+        print('One-Hot Variable. In each vector first item should be on: \n',
+              sess.run(one_hot))
+
+
+def test_sorted_indx():
+
+    test_data = [[4, 1, 8],
+                 [10, 2, 36],
+                 [44, 55, 22]]
+    test_data  = tf.Variable(test_data, dtype=tf.float32, name="test_data")
+    sorted_idx = tf_utils.get_sorted_idx(test_data,
+                                         test_data.get_shape().as_list(),
+                                         3)
+    sorted_idx_desc = tf_utils.get_sorted_idx(test_data,
+                                              test_data.get_shape().as_list(),
+                                              3,
+                                              is_ascending=False)
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+        print('Sorted Indices (in ascending order): \n',
+              sess.run(sorted_idx))
+        print('Sorted Indices (in descending order): \n',
+              sess.run(sorted_idx_desc))
 
 
 if __name__ == "__main__":
 
     # test_scatter_nd_add()
-    test_update_tensor_els()
+    # test_matlab_subscription()
+    # test_create_one_hot()
+    test_sorted_indx()

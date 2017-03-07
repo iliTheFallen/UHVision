@@ -31,72 +31,57 @@ import tensorflow as tf
 import numpy as np
 
 
-def create_one_hot_var(shape, depth, dtype=tf.float32, name=''):
+def create_one_hot_var(shape, depth, dtype=tf.float32):
     '''
     It creates a one_hot tensor variable. It initializes the first (0th) one_hot bits
      along the the depth dimension. Its dimensionality is equal to (shape,)+depth
     :param shape: (batch_size)x[features]
     :param depth: How many one_hot bits the tf variable is going to have
     :param dtype: Data type of the one_hot tensor variable
-    :param name: Name of the one_hot tensor variable
     :return: Reference to the newly created one_hot tensor variable
     '''
     on_idx = np.zeros(shape, dtype=np.int32)
-    one_hot = tf.Variable(tf.one_hot(on_idx, depth, dtype=dtype),
-                          name=name)
+    one_hot = tf.one_hot(on_idx, depth, dtype=dtype)
     return one_hot
 
 
-def _restructure_indexing(indices_list,
-                          updates):
+def erase_els(ref,
+              eraser,
+              input_,
+              indices):
     '''
 
-    :param indices_list:
-    :param updates:
-    :return:
-    '''
-    k = len(indices_list)  # Innermost dim of the indices array
-    shape_up = updates.get_shape().as_list()
-    u = len(shape_up)  # Rank of the update matrix
-    # k # of dimensions are required to index "updates" list
-    idx_shape = np.split(np.asarray(shape_up), [k, u])[0].tolist()
-    # Dimension in which index into "input_" is stored
-    idx_shape.append(k)
-    actual_indices = tf.stack(indices_list, axis=1)
-    actual_indices = tf.reshape(actual_indices, idx_shape)
-
-    return actual_indices
-
-
-def update_tensor_els(input_,
-                      indices_list,
-                      updates):
-    '''
-
+    :param ref:
+    :param eraser:
     :param input_:
-    :param indices_list:
-    :param updates:
+    :param indices:
     :return:
     '''
-    actual_indices = _restructure_indexing(indices_list, updates)
-    updated_ten = tf.scatter_nd_update(input_, actual_indices, updates)
 
+    actual_indices = tf.stack(indices, axis=1)
+    temp_ref = tf.Variable(ref.initialized_value())
+    updated_ten = tf.scatter_nd_update(temp_ref, actual_indices, eraser)
+    updated_ten = tf.multiply(input_, updated_ten)
     return updated_ten
 
 
-def inc_tensor_els(input_,
-                   indices_list,
-                   addition):
+def inc_tensor_els(ref,
+                   addition,
+                   input_,
+                   indices):
     '''
 
-    :param input_:
-    :param indices_list:
+    :param ref:
     :param addition:
+    :param input_:
+    :param indices:
     :return:
     '''
-    actual_indices = _restructure_indexing(indices_list, addition)
-    updated_ten = tf.scatter_nd_add(input_, actual_indices, addition)
 
+    actual_indices = tf.stack(indices, axis=1)
+    temp_ref = tf.Variable(ref.initialized_value())
+    inc_ten = tf.scatter_nd_add(temp_ref, actual_indices, addition)
+    updated_ten = tf.add(input_, inc_ten)
     return updated_ten
 
 
@@ -114,7 +99,7 @@ def get_sorted_idx(input_,
     '''
     # Always sorts in descending order
     num_dims = len(ten_shape)
-    _,sorted_idx = tf.nn.top_k(input_, k=ten_shape[num_dims - 1]).indices
+    _,sorted_idx = tf.nn.top_k(input_, k=ten_shape[num_dims - 1])
     size = []
     begin = np.zeros(num_dims, dtype=np.int32).tolist()  # Always begins at the 0th idx
     begin = tf.constant(begin)
@@ -124,7 +109,7 @@ def get_sorted_idx(input_,
     size.append(num_els)
     size = tf.constant(size)
     if is_ascending:
-        sorted_idx = tf.reverse(sorted_idx, num_dims-1)
+        sorted_idx = tf.reverse(sorted_idx, [num_dims-1])
 
     return tf.slice(sorted_idx, begin, size)
 

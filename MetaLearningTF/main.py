@@ -28,6 +28,8 @@
     **********************************************************************************
 '''
 
+import time as time
+import numpy as np
 import tensorflow as tf
 
 from model.nn_model import NNModel
@@ -60,18 +62,40 @@ def main():
     #    input_ : (batch_size)x(nb_samples*nb_samples_per_class)x(input_size)
     #    target : (batch_size)x(nb_samples*nb_samples_per_class)
     with tf.Graph().as_default():
-        nn.build(seq_len)  # Build tensors used throughout entire session
-        sess = tf.Session()
-        for e, (input_, target) in sample_generator:
-            feed_dict = nn.prepare_dict(input_, target)
-            loss, train_op = nn.train(e)
-            # Run one step of the model.  The return values are the activations
-            # from the `train_op` (which is discarded) and the `loss` Op.
-            _, loss_val = sess.run([train_op, loss],
-                                   feed_dict=feed_dict)
-            # Asses your predictions against target
+        # Store all scores (each score is a loss-per-episode)
+        all_scores, scores = [], []
+        # Build common tensors used throughout entire session
+        nn.build(seq_len)
+        # Generate inference and loss models
+        (loss, train_op) = nn.generate_models()
+        with tf.Session() as sess:
+            st = time.time()
+            # !!!!!!!!NEVER EVER EXECUTE the FOLLOWING ASSIGNMENT BEFORE BUILDING YOUR MODEL!!!!!!!
+            init = tf.global_variables_initializer()
+            try:
+                # Initialize all variables (Note that! not operation tensors; but variable tensors)
+                print('Initializing variables...')
+                sess.run(init)
+                print('Training starts...')
+                for e, (input_, target) in sample_generator:
+                    feed_dict = nn.prepare_dict(input_, target)
+                    # Run one step of the model.  The return values are the activations
+                    # from the `train_op` (which is discarded) and the `loss` Op.
+                    _, score = sess.run([train_op, loss],
+                                        feed_dict=feed_dict)
+                    print("current score ", score)
+                    all_scores.append(score)
+                    scores.append(score)
+                    # Asses your predictions against target
+                    if e > 0 and not (e%100):
+                        print('Episode %05d: %.6f' % (e, np.mean(scores).tolist()[0]))
+                        scores.clear()
+            except KeyboardInterrupt:
+                print('Elapsed time: %ld' % (time.time()-st))
+                pass
+
+        # TODO Save the model for we can restore it in a completely different environment
 
 
 if __name__ == "__main__":
-
     main()

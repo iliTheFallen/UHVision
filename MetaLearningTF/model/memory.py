@@ -38,26 +38,30 @@ import utils.similarity_measures as sim_utils
 
 class MemoryUnit(object):
 
-    LAYER_M_CONSTS = "mConsts"
-    LAYER_MEMORY_OPS = "memory"
     LAYER_UPDATE_MEM = "updateMem"
-
-    # Node Names
-    NODE_M_ERASER = "memEraser"  # Used to erase the memory
-    NODE_M_WW_T_1D = "memWWT1D"  # Used to index the 1st dimension of ww_t
-    NODE_M_TM1_1D = "memTM11D"  # Used to index the 1st dimension of m_tm1
-    NODE_GAMMA = "gamma"  # Used to decay usage weights at time t-1
-
-    # Operations
-    OP_M_T = "m_t"  # Memory content
-    OP_R_T = "r_t"  # Data read from memory at time t
-    OP_WR_T = "wr_t"  # Reading weights based cosine similarity at time t
-    OP_WU_T = "wu_t"  # Usage weights based on LRU-access at time t
 
     # Config options
     __batch_size = 0
     __memory_size = 0
     __num_read_heads = 0
+
+    # Constant tensors
+    __ww_t_1d = None  # Used to index the 1st dimension of ww_t
+    __m_tm1_1d = None   # Used to index the 1st dimension of m_tm1
+    __m_eraser = None  # Used to erase the memory
+    __gamma = 0  # Used to decay usage weights at time t-1
+
+    # Stateful tensors (Operational tensors). Changing over time
+
+    # Memory operations
+    __m_0 = None
+    __r_0 = None
+    __wr_0 = None
+    __wu_0 = None
+
+    # Variables used as references
+    __temp_m_t = None
+    __ww_t = None
 
     def __init__(self,
                  batch_size,
@@ -71,128 +75,116 @@ class MemoryUnit(object):
         self.__gamma = gamma
 
     def build(self):
-        print('****************************************************************')
-        print('***********************Building memory...***********************')
-        print('****************************************************************\n')
+        print('******************Building Memory...')
         # Create constant tensors
-        with tf.variable_scope(MemoryUnit.LAYER_M_CONSTS):
-            tf.zeros((self.__batch_size,
-                      self.__batch_size,
-                      self.__memory_size[1]),
-                     dtype=tf.float32,
-                     name=MemoryUnit.NODE_M_ERASER)
-            tf.constant(np.arange(0,
-                                  self.__batch_size * self.__num_read_heads,
-                                  dtype=np.int32).tolist(),
-                        dtype=tf.int32,
-                        name=MemoryUnit.NODE_M_WW_T_1D)
-            tf.constant(np.arange(0,
-                                  self.__batch_size,
-                                  dtype=np.int32).tolist(),
-                        dtype=tf.int32,
-                        name=MemoryUnit.NODE_M_TM1_1D)
-            tf.constant([self.__gamma], dtype=tf.float32, shape=[1], name=MemoryUnit.NODE_GAMMA)
-        with tf.variable_scope(MemoryUnit.LAYER_MEMORY_OPS):
-            # Dimensionality of the memory: BS X (MS)x(MIL)
-            # I.e. it has batch_size # of memories, each of which has a size of
-            # (mem_length)x(mem_el_size)
-            tf.Variable(tf.multiply(1e-6,
-                                    tf.ones((self.__batch_size,)+self.__memory_size,
-                                            dtype=tf.float32)),
-                        name=MemoryUnit.OP_M_T)
-            tf.Variable(tf.zeros([self.__batch_size,
-                                  self.__num_read_heads*self.__memory_size[1]]),
-                        name=MemoryUnit.OP_R_T)
-            # 1st memory-loc for each read-head is on / rest is off
-            tf_utils.create_one_hot_var((self.__batch_size, self.__num_read_heads),
-                                        self.__memory_size[0],
-                                        name=MemoryUnit.OP_WR_T)
-            tf_utils.create_one_hot_var(self.__batch_size,
-                                        self.__memory_size[0],
-                                        name=MemoryUnit.OP_WU_T)
+        print('Building Memory Operation Constants...')
+        self.__m_eraser = tf.zeros((self.__batch_size,
+                                    self.__memory_size[1]))
+        self.__ww_t_1d = tf.constant(np.arange(0,
+                                               self.__batch_size * self.__num_read_heads,
+                                               dtype=np.int32).tolist(),
+                                     dtype=tf.int32)
+        self.__m_tm1_1d = tf.constant(np.arange(0,
+                                                self.__batch_size,
+                                                dtype=np.int32).tolist(),
+                                      dtype=tf.int32)
+        self.__gamma = tf.constant([self.__gamma], shape=[1], dtype=tf.float32)
+        # Create operational tensors.
+        # Dimensionality of the memory: BSx(MS)x(MIL)
+        # I.e. it has batch_size # of memories, each of which has a size of
+        # (mem_length)x(mem_el_size)
+        print('Building Memory Update Operations...')
+        self.__m_0 = tf.multiply(tf.to_float(1e-6),
+                                 tf.ones((self.__batch_size,)+self.__memory_size, dtype=tf.float32))
+        # 1st memory-loc for each read-head is on / rest is off. Both are non-trainable tensors
+        self.__wr_0 = tf_utils.create_one_hot_var((self.__batch_size, self.__num_read_heads),
+                                                  self.__memory_size[0])
+        self.__wu_0 = tf_utils.create_one_hot_var(self.__batch_size, self.__memory_size[0])
+        self.__r_0 = tf.zeros([self.__batch_size, self.__num_read_heads*self.__memory_size[1]], dtype=tf.float32)
+        print('Building References for Memory Operations...')
+        with tf.variable_scope(MemoryUnit.LAYER_UPDATE_MEM):
+            self.__temp_m_t = tf.Variable(tf.ones((self.__batch_size,)+self.__memory_size),
+                                          trainable=False,
+                                          name="temp_m_t")
+            self.__ww_t = tf.Variable(tf.zeros([self.__batch_size*self.__num_read_heads,
+                                                self.__memory_size[0]]),
+                                      trainable=False,
+                                      name="ww_t")
+        print()
+        print()
 
-    @staticmethod
-    def get_node_m_consts():
-        with tf.variable_scope(MemoryUnit.LAYER_M_CONSTS) as const_scope:
-            const_scope.reuse_variables()
-            return tf.get_variable(MemoryUnit.NODE_M_ERASER), \
-                   tf.get_variable(MemoryUnit.NODE_M_WW_T_1D), \
-                   tf.get_variable(MemoryUnit.NODE_M_TM1_1D), \
-                   tf.get_variable(MemoryUnit.NODE_GAMMA)
+    def get_init_op_memory(self):
 
-    @staticmethod
-    def get_op_memory():
-        with tf.variable_scope(MemoryUnit.LAYER_MEMORY_OPS):
-            m_t = tf.get_variable(MemoryUnit.OP_M_T)
-            r_t = tf.get_variable(MemoryUnit.OP_R_T)
-            wr_t = tf.get_variable(MemoryUnit.OP_WR_T)
-            wu_t = tf.get_variable(MemoryUnit.OP_WU_T)
-        return m_t, r_t, wr_t, wu_t
+        return self.__m_0, self.__r_0, self.__wr_0, self.__wu_0
 
-    def update_mem(self, m_tm1, wr_tm1, wu_tm1, s_t, a_t, k_t):
+    def update_mem(self, m_tm1, wr_tm1, wu_tm1, k_t, a_t, s_t):
         '''
         Define operations to update memory and weights
 
         :param m_tm1: State of the memory at time t-1
         :param wr_tm1: Read-weights at time t-1--BSxNRxMS
-        :param wu_tm1: Usage-weights at time t-1--
-        :param s_t: Learnable interpolation value at time t--BSxNRx1
-        :param a_t: Information per sample stored in the memory--BSxNRxMIL
+        :param wu_tm1: Usage-weights at time t-1-- BSxMS
         :param k_t: Key produced by the controller to generate read-weights--BSxNRxMIL
+        :param a_t: Information per sample that will be stored in the memory--BSxNRxMIL
+        :param s_t: Learnable interpolation value at time t--BSxNRx1
         :return:
         '''
 
-        print('******************************************************')
-        print('*****************Memory Update Ops...*****************')
-        print('******************************************************')
-        [m_eraser, ww_t_1d, m_tm1_1d, gamma] = MemoryUnit.get_node_m_consts()
-        [m_t, r_t, wr_t, wu_t] = MemoryUnit.get_op_memory()
+        print('******************Executing Memory Update Ops...')
         # Where m_t is updated
+        print('Updating Memory...')
         with tf.variable_scope(MemoryUnit.LAYER_UPDATE_MEM):
             # Indices of Least-used weights at time t-1
             wlu_tm1 = tf_utils.get_sorted_idx(wu_tm1,
-                                              wu_t.get_shape().as_list(),
-                                              self.__num_read_heads)  # BSxNR
+                                              wu_tm1.get_shape().as_list(),
+                                              self.__num_read_heads,
+                                              is_ascending=False)  # BSxNR
             # Write-weights at time t
             # Broadcasting s_t via its 3rd dimension for its size is
             # BSxNRx1 while wr_tm1 is with the size of BSxNRxMS
             ww_t = tf.multiply(s_t, wr_tm1)  # BSxNRxMS
-            ww_t = tf.reshape(ww_t, (self.__batch_size*self.__num_read_heads,
-                                     self.__memory_size[0]))  # (BS.NR)xMS
-            sec_dim = tf.reshape(wlu_tm1, (self.__batch_size*self.__num_read_heads))
-            indices_list = [ww_t_1d, sec_dim]
-            addition = tf.subtract(1.0, tf.reshape(s_t,
-                                                   (self.__batch_size,
-                                                    self.__num_read_heads)))  # BSxNR
-            ww_t = tf_utils.inc_tensor_els(ww_t, indices_list, addition)
+            ww_t = tf.reshape(ww_t, [self.__batch_size*self.__num_read_heads,
+                                     self.__memory_size[0]])  # (BS.NR)xMS
+            sec_dim = tf.reshape(wlu_tm1, [-1])  # BS.NR
+            addition = tf.subtract(1.0, tf.reshape(s_t, [-1]))  # BS.NR
+            # No worries. It does not update the value of your reference variable.
+            # The returned operation is the increased tensor element == ww_t+addition
+            ww_t = tf_utils.inc_tensor_els(self.__ww_t,
+                                           addition,
+                                           ww_t,
+                                           [self.__ww_t_1d, sec_dim])
             # Write-weights at time t after interpolation of
             # read-weights and least-used weights at time t-1
-            ww_t = tf.reshape(ww_t, (self.__batch_size,
+            ww_t = tf.reshape(ww_t, [self.__batch_size,
                                      self.__num_read_heads,
-                                     self.__memory_size[0]))  # BSxNRxMS
+                                     self.__memory_size[0]])  # BSxNRxMS
             # Before writing to memory, Least-used locations are erased.
-            sec_dim = tf.slice(wlu_tm1, [0, 0], [self.__batch_size, 1])
-            indices_list = [m_tm1_1d, sec_dim]
-            tf_utils.update_tensor_els(m_tm1, indices_list, m_eraser)
+            sec_dim = tf.reshape(tf.slice(wlu_tm1, [0, 0], [self.__batch_size, 1]), [-1])
+            # No worries. It does not update the value of your reference variable.
+            # The returned operation is equal to m_tm1[indices] = 0
+            m_t = tf_utils.erase_els(self.__temp_m_t,
+                                     self.__m_eraser,
+                                     m_tm1,
+                                     [self.__m_tm1_1d, sec_dim])
             # Write the information produced by the controller
             # after weighting it with write-weights at time t.
             # Each memory location has a weight that corresponds to each read head.
             # Information read by each head stored in each row (2nd dimension)
             # of a_t for a given sample (1st dimension).
             w_a_t = tf.matmul(tf.transpose(ww_t, perm=[0, 2, 1]), a_t)  # batch_mul(BSxMSxNR, BSxNRxMIL)
-            tf.assign(m_t, tf.add(m_t, w_a_t))  # BSxMSxMIL
-
+            m_t = tf.add(m_t, w_a_t)  # BSxMSxMIL
+        print('Updating Weights (Read & Usage)...')
         # Update for the next step
         K_t = sim_utils.cosine_similarity(k_t, m_t)  # BSxNRxMS
-        tf.assign(wr_t,
-                  tf.nn.softmax(tf.reshape(K_t, (self.__batch_size*self.__num_read_heads,
-                                                 self.__memory_size[0]))))
-        tf.assign(wr_t,
-                  tf.reshape(wr_t, (self.__batch_size,
-                                    self.__num_read_heads,
-                                    self.__memory_size[0])))
+        wr_t = tf.nn.softmax(tf.reshape(K_t, [self.__batch_size*self.__num_read_heads,
+                                              self.__memory_size[0]]))
+        wr_t = tf.reshape(wr_t, [self.__batch_size, self.__num_read_heads, self.__memory_size[0]])
         # Memory Usage weights at time t
-        tf.assign(wu_t, tf.add(tf.multiply(gamma, wu_tm1), tf.reduce_sum(wr_t, axis=1)))
-        tf.assign(wu_t, tf.add(wu_t, tf.reduce_sum(ww_t, axis=1)))  # BSxMS
+        wu_t = tf.add(tf.multiply(self.__gamma, wu_tm1),
+                      tf.reduce_sum(wr_t, axis=1))
+        wu_t = tf.add(wu_t, tf.reduce_sum(ww_t, axis=1))  # BSxMS
         # Use read-heads to read data from memory
-        tf.assign(r_t, tf.reshape(tf.matmul(wr_t, m_t), [self.__batch_size, -1]))  # BSx(NR.MIL)
+        print('Reading data from memory...')
+        r_t = tf.reshape(tf.matmul(wr_t, m_t), [self.__batch_size, -1])  # BSx(NR.MIL)
+
+        return m_t, r_t, wr_t, wu_t
