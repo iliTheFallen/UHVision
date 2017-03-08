@@ -20,10 +20,19 @@
     Please contact Hien Nguyen V for more info about licensing hvnguy35@central.uh.edu, 
     and other members of the UHVision Lab via github issues section.
     **********************************************************************************
-    Author:   Ilker GURCAN
+    Author:   Sidharth Sadani
     Date:     3/7/17
-    File:     main
-    Comments: 
+    File:     load_data
+    Comments: This module loads input data which consist of both video frames
+     and associated dependent data such as steering angle, speed, out of road flag, etc.
     **********************************************************************************
 '''
+
+
+def load_input_frames(input_folder):
+    pass
+
+
+def load_dependent_vars(folder, json_file):
+    pass
 
