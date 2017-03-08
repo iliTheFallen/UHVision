@@ -1,9 +1,9 @@
-
-import numpy as np
 import os
 import random
 
-from data.images import get_shuffled_images, load_transform
+import numpy as np
+
+from metalearning_tf.data.images import get_shuffled_images, load_transform
 
 
 class OmniglotGenerator(object):

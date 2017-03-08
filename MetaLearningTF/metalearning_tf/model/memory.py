@@ -31,9 +31,9 @@
 
 import numpy as np
 import tensorflow as tf
+from metalearning_tf.utils import tf_utils
 
-import utils.tf_utils as tf_utils
-import utils.similarity_measures as sim_utils
+import metalearning_tf.utils.similarity_measures as sim_utils
 
 
 class MemoryUnit(object):

@@ -29,11 +29,12 @@
 '''
 
 import time as time
+
 import numpy as np
 import tensorflow as tf
+from metalearning_tf.data.generators import OmniglotGenerator
 
-from model.nn_model import NNModel
-from data.generators import OmniglotGenerator
+from metalearning_tf.model.nn_model import NNModel
 
 
 def main():

@@ -201,7 +201,7 @@ class ControllerUnit(object):
         :param c_tm1: Content of the previous cell at time t-1 -- BSxCS
         :param h_tm1: Previous output of the hidden layer at time t-1 -- BSxCS
         :param r_tm1: Previous output of the read head at time t-1
-         (Memory module calculates it) -- BSx(NR.MIL)
+         (Memory meta_tf calculates it) -- BSx(NR.MIL)
 
         :return: None
         '''

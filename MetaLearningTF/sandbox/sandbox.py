@@ -27,9 +27,10 @@
     **********************************************************************************
 '''
 
-import tensorflow as tf
 import numpy as np
-import utils.tf_utils as tf_utils
+import tensorflow as tf
+
+from metalearning_tf.utils import tf_utils
 
 
 def test_scatter_nd_add():

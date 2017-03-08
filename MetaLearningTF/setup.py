@@ -21,12 +21,24 @@
     and other members of the UHVision Lab via github issues section.
     **********************************************************************************
     Author:   Ilker GURCAN
-    Date:     2/20/17
-    File:     __init__.py
-    Comments: 
+    Date:     3/7/17
+    File:     setup
+    Comments: Anyone may use this script in order to install metalearning_tf
+     project as a python distribution
     **********************************************************************************
 '''
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+from setuptools import setup, find_packages
+
+setup(
+      name="metalearning_tf",
+      version="0.0.1",
+      author="Ilker GURCAN",
+      author_email="igurcan@uh.edu",
+      description="Meta Learning Tensorflow Implementation",
+      license="GNU",
+      keywords="ntm meta-learning mann",
+      url="https://github.com/iliTheFallen/UHVision/tree/master/MetaLearningTF",
+      packages=find_packages(),
+      requires=['tensorflow (>=1.0)', 'scipy', 'numpy']
+)

@@ -30,10 +30,11 @@
 '''
 
 import math as math
-import tensorflow as tf
 
-from model.controller_unit import ControllerUnit
-from model.memory import MemoryUnit
+import tensorflow as tf
+from metalearning_tf.model.memory import MemoryUnit
+
+from metalearning_tf.model.controller_unit import ControllerUnit
 
 
 class NNModel(object):
@@ -52,7 +53,7 @@ class NNModel(object):
     __memory_size = (0, 0)  # 2D Tuple specifying (numberOfElements)X(sizeOfEachElement)
     __num_read_heads = 0  # Number of read heads attached to controller
     __learning_rate = 0.0
-    # Two main components that this module tries to fuse one with another
+    # Two main components that this meta_tf tries to fuse one with another
     __controller = None
     __memory = None
     # Placeholders
