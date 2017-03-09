@@ -45,12 +45,12 @@ def build_alex_net(input_shape,
 
     print('Building AlexNet...')
     # input_shape does not have the dimension for batch size.
-    # It is specified at training step. That is why we have
+    # It is specified in training phase. That is why we have
     # None for the 1st dimension
-    input_shape.insert(0, None)
+    # input_shape.insert(0, None)
     # Building network...
     network = input_data(shape=input_shape)
-    weight_init = normal(shape=[input_shape[1]*input_shape[2], ], mean=0.0, stddev=0.01)
+    weight_init = normal(mean=0.0, stddev=0.01)
     network = conv_2d(network,
                       96, 11, strides=4,
                       activation='relu',
@@ -90,7 +90,7 @@ def build_alex_net(input_shape,
     # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)
     momentum = Momentum(learning_rate=0.01,
                         lr_decay=0.0005,
-                        decay_step=input_shape[0]*NUM_EPOCHS,
+                        decay_step=100,
                         momentum=0.9)
     network = regression(network,
                          optimizer=momentum,
