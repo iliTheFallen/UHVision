@@ -200,6 +200,25 @@ def test_where():
         sess.run(init)
         print('Result of where operation: \n', sess.run(gt_zero))
 
+
+def multi_dim_matmul():
+
+    test_data = np.ones([3, 3, 3])
+    test_data2 = np.ones([3, 3, 4]) * 2
+
+    test_data = tf.constant(test_data.tolist(), dtype=tf.float32, name="test_data")
+    test_data2 = tf.constant(test_data2.tolist(), dtype=tf.float32, name="test_data2")
+    out = tf.matmul(test_data, test_data2)
+
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+        print('First array: \n', sess.run(test_data))
+        print('Second array: \n', sess.run(test_data2))
+        print('Result of matmul operation: \n', sess.run(out))
+
+
+
 if __name__ == "__main__":
 
     # test_scatter_nd_add()
@@ -208,5 +227,6 @@ if __name__ == "__main__":
     # test_sorted_idx()
     # test_boolean_cast()
     # test_gather_nd()
-    test_foldl()
+    # test_foldl()
     # test_where()
+    multi_dim_matmul()

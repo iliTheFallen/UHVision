@@ -125,7 +125,6 @@ class ControllerUnit(object):
         with tf.variable_scope(ControllerUnit.LAYER_OUTPUT):
             # Weight and Bias for 'key'
             init = tf_utils.glorot_uniform_init([self.__num_read_heads,
-                                                 self.__controller_size,
                                                  self.__memory_size[1]])
             tf.get_variable(ControllerUnit.NODE_OUT_W_KEY,
                             [self.__num_read_heads,
@@ -136,8 +135,7 @@ class ControllerUnit(object):
                             [self.__num_read_heads, self.__memory_size[1]],
                             initializer=tf.zeros_initializer())
             # Weight and Bias for 'add'
-            init = tf_utils.glorot_uniform_init([self.__num_read_heads,
-                                                 self.__controller_size,
+            init = tf_utils.glorot_uniform_init([self.__controller_size,
                                                  self.__memory_size[1]])
             tf.get_variable(ControllerUnit.NODE_OUT_W_ADD,
                             [self.__num_read_heads,
@@ -148,8 +146,7 @@ class ControllerUnit(object):
                             [self.__num_read_heads, self.__memory_size[1]],
                             initializer=tf.zeros_initializer())
             # Weight and Bias for 'sigma'
-            init = tf_utils.glorot_uniform_init([self.__num_read_heads,
-                                                 self.__controller_size,
+            init = tf_utils.glorot_uniform_init([self.__controller_size,
                                                  1])
             tf.get_variable(ControllerUnit.NODE_OUT_W_SIG,
                             [self.__num_read_heads, self.__controller_size, 1],

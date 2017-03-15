@@ -79,16 +79,14 @@ class MemoryUnit(object):
         # Create constant tensors
         print('Building Memory Operation Constants...')
         self.__m_eraser = tf.zeros((self.__batch_size,
-                                    self.__memory_size[1]))
+                                    self.__memory_size[1]),
+                                   name="memoryEraser")
         self.__ww_t_1d = tf.constant(np.arange(0,
                                                self.__batch_size * self.__num_read_heads,
                                                dtype=np.int32).tolist(),
                                      dtype=tf.int32)
-        self.__m_tm1_1d = tf.constant(np.arange(0,
-                                                self.__batch_size,
-                                                dtype=np.int32).tolist(),
-                                      dtype=tf.int32)
-        self.__gamma = tf.constant([self.__gamma], shape=[1], dtype=tf.float32)
+        self.__m_tm1_1d = tf.range(0, self.__batch_size, dtype=tf.int32, name="memoryUp1stDim")
+        self.__gamma = tf.constant([self.__gamma], shape=[1], dtype=tf.float32, name="gamma")
         # Create operational tensors.
         # Dimensionality of the memory: BSx(MS)x(MIL)
         # I.e. it has batch_size # of memories, each of which has a size of
@@ -137,9 +135,7 @@ class MemoryUnit(object):
             ww_t = tf.reshape(ww_t, [self.__batch_size*self.__num_read_heads,
                                      self.__memory_size[0]])  # (BS.NR)xMS
             sec_dim = tf.reshape(wlu_tm1, [-1])  # BS.NR
-            addition = tf.subtract(1.0, tf.reshape(s_t, [-1]))  # BS.NR
-            # No worries. It does not update the value of your reference variable.
-            # The returned operation is the increased tensor element == ww_t+addition
+            addition = tf.subtract(tf.constant([1.0]), tf.reshape(s_t, [-1]))  # BS.NR
             ww_t = tf_utils.inc_tensor_els(ww_t,
                                            addition,
                                            [self.__ww_t_1d, sec_dim])
@@ -149,9 +145,7 @@ class MemoryUnit(object):
                                      self.__num_read_heads,
                                      self.__memory_size[0]])  # BSxNRxMS
             # Before writing to memory, Least-used locations are erased.
-            sec_dim = tf.reshape(tf.slice(wlu_tm1, [0, 0], [self.__batch_size, 1]), [-1])
-            # No worries. It does not update the value of your reference variable.
-            # The returned operation is equal to m_tm1[indices] = 0
+            sec_dim = wlu_tm1[:, 0]
             m_t = tf_utils.update_var_els(m_tm1,
                                           self.__m_eraser,
                                           [self.__m_tm1_1d, sec_dim])
@@ -167,7 +161,7 @@ class MemoryUnit(object):
         K_t = sim_utils.cosine_similarity(k_t, m_t)  # BSxNRxMS
         wr_t = tf.nn.softmax(tf.reshape(K_t, [self.__batch_size*self.__num_read_heads,
                                               self.__memory_size[0]]))
-        wr_t = tf.reshape(wr_t, [self.__batch_size, self.__num_read_heads, self.__memory_size[0]])
+        wr_t = tf.reshape(wr_t, [self.__batch_size, self.__num_read_heads, self.__memory_size[0]])  # BSxNRxMS
         # Memory Usage weights at time t
         wu_t = tf.add(tf.multiply(self.__gamma, wu_tm1),
                       tf.reduce_sum(wr_t, axis=1))

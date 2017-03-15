@@ -141,6 +141,7 @@ def main():
                     acc_list += accu
                     scores.append(score)
                     if e > 0 and e % SUMMARY_FREQ == 0:
+                        print('*******************************Episode #%05d****************************' % e)
                         summary = sess.run(merged, feed_dict=feed_dict)
                         print('Writing summaries...')
                         writer.add_summary(summary, e)
@@ -148,6 +149,7 @@ def main():
                         print('Average Accuracy for %d Episodes: %s' % (SUMMARY_FREQ, acc_list / float(SUMMARY_FREQ)))
                         print('Average Score for %d Episodes: %.3f' % (SUMMARY_FREQ, np.mean(scores)))
                         scores, acc_list = [], np.zeros(sample_generator.nb_samples_per_class)
+                        print('*****************************************************************************')
             except KeyboardInterrupt:
                 pass
             finally:
