@@ -31,16 +31,33 @@ import tensorflow as tf
 import numpy as np
 
 
-def create_one_hot_var(shape, depth, dtype=tf.float32):
+def glorot_uniform_init(shape, dtype=tf.float32):
+    '''
+
+    :param shape:
+    :param dtype:
+    :return:
+    '''
+    shape = np.array(shape)
+    if isinstance(shape, int):
+        high = np.sqrt(6. / shape)
+    else:
+        high = np.sqrt(6. / (np.sum(shape[:2]) * np.prod(shape[2:])))
+    return tf.random_uniform_initializer(minval=-high, maxval=high, dtype=dtype)
+
+
+def create_one_hot_var(shape, depth, dtype=tf.float32, on_idx=None):
     '''
     It creates a one_hot tensor variable. It initializes the first (0th) one_hot bits
      along the the depth dimension. Its dimensionality is equal to (shape,)+depth
     :param shape: (batch_size)x[features]
     :param depth: How many one_hot bits the tf variable is going to have
     :param dtype: Data type of the one_hot tensor variable
+    :param on_idx:
     :return: Reference to the newly created one_hot tensor variable
     '''
-    on_idx = np.zeros(shape, dtype=np.int32)
+    if on_idx is None:
+        on_idx = np.zeros(shape, dtype=np.int32)
     one_hot = tf.one_hot(on_idx, depth, dtype=dtype)
     return one_hot
 
@@ -57,48 +74,30 @@ def update_var_els(input_,
     '''
 
     actual_indices = tf.stack(indices, axis=1)
-    updated_ten = tf.scatter_nd_update(input_, actual_indices, updates)
-    return updated_ten
+    old_vals = tf.gather_nd(input_, actual_indices)
+    nullifier_updates = tf.subtract(updates, old_vals)
+    sparse_updates = tf.scatter_nd(actual_indices,
+                                   nullifier_updates,
+                                   input_.get_shape().as_list())
+    return tf.add(input_, sparse_updates)
 
 
-def erase_els(ref,
-              eraser,
-              input_,
-              indices):
-    '''
-
-    :param ref:
-    :param eraser:
-    :param input_:
-    :param indices:
-    :return:
-    '''
-
-    actual_indices = tf.stack(indices, axis=1)
-    temp_ref = tf.Variable(ref.initialized_value())
-    updated_ten = tf.scatter_nd_update(temp_ref, actual_indices, eraser)
-    updated_ten = tf.multiply(input_, updated_ten)
-    return updated_ten
-
-
-def inc_tensor_els(ref,
+def inc_tensor_els(input_,
                    addition,
-                   input_,
                    indices):
     '''
 
-    :param ref:
-    :param addition:
     :param input_:
+    :param addition:
     :param indices:
     :return:
     '''
 
     actual_indices = tf.stack(indices, axis=1)
-    temp_ref = tf.Variable(ref.initialized_value())
-    inc_ten = tf.scatter_nd_add(temp_ref, actual_indices, addition)
-    updated_ten = tf.add(input_, inc_ten)
-    return updated_ten
+    increased = tf.scatter_nd(actual_indices,
+                              addition,
+                              input_.get_shape().as_list())
+    return tf.add(input_, increased)
 
 
 def get_sorted_idx(input_,
@@ -129,22 +128,3 @@ def get_sorted_idx(input_,
 
     return tf.slice(sorted_idx, begin, size)
 
-
-def slice_with_range(input_,
-                     dim_range):
-    '''
-
-    :param input_:
-    :param dim_range:
-    :return:
-    '''
-    shape = dim_range.shape
-    begin = []
-    size = []
-    for d in range(shape[0]):
-        begin.append(dim_range[d, 0])
-        size.append(dim_range[d, 1]-dim_range[d, 0])
-    begin = tf.constant(begin, dtype=tf.int32)
-    size = tf.constant(size, dtype=tf.int32)
-
-    return tf.slice(input_, begin, size)

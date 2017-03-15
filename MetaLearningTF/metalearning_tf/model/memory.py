@@ -29,8 +29,8 @@
     **********************************************************************************
 '''
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
 from metalearning_tf.utils import tf_utils
 
 import metalearning_tf.utils.similarity_measures as sim_utils
@@ -101,15 +101,6 @@ class MemoryUnit(object):
                                                   self.__memory_size[0])
         self.__wu_0 = tf_utils.create_one_hot_var(self.__batch_size, self.__memory_size[0])
         self.__r_0 = tf.zeros([self.__batch_size, self.__num_read_heads*self.__memory_size[1]], dtype=tf.float32)
-        print('Building References for Memory Operations...')
-        with tf.variable_scope(MemoryUnit.LAYER_UPDATE_MEM):
-            self.__temp_m_t = tf.Variable(tf.ones((self.__batch_size,)+self.__memory_size),
-                                          trainable=False,
-                                          name="temp_m_t")
-            self.__ww_t = tf.Variable(tf.zeros([self.__batch_size*self.__num_read_heads,
-                                                self.__memory_size[0]]),
-                                      trainable=False,
-                                      name="ww_t")
         print()
         print()
 
@@ -149,9 +140,8 @@ class MemoryUnit(object):
             addition = tf.subtract(1.0, tf.reshape(s_t, [-1]))  # BS.NR
             # No worries. It does not update the value of your reference variable.
             # The returned operation is the increased tensor element == ww_t+addition
-            ww_t = tf_utils.inc_tensor_els(self.__ww_t,
+            ww_t = tf_utils.inc_tensor_els(ww_t,
                                            addition,
-                                           ww_t,
                                            [self.__ww_t_1d, sec_dim])
             # Write-weights at time t after interpolation of
             # read-weights and least-used weights at time t-1
@@ -162,10 +152,9 @@ class MemoryUnit(object):
             sec_dim = tf.reshape(tf.slice(wlu_tm1, [0, 0], [self.__batch_size, 1]), [-1])
             # No worries. It does not update the value of your reference variable.
             # The returned operation is equal to m_tm1[indices] = 0
-            m_t = tf_utils.erase_els(self.__temp_m_t,
-                                     self.__m_eraser,
-                                     m_tm1,
-                                     [self.__m_tm1_1d, sec_dim])
+            m_t = tf_utils.update_var_els(m_tm1,
+                                          self.__m_eraser,
+                                          [self.__m_tm1_1d, sec_dim])
             # Write the information produced by the controller
             # after weighting it with write-weights at time t.
             # Each memory location has a weight that corresponds to each read head.

@@ -27,8 +27,8 @@
     **********************************************************************************
 '''
 
-import numpy as np
 import tensorflow as tf
+import numpy as np
 
 from metalearning_tf.utils import tf_utils
 
@@ -81,7 +81,7 @@ def test_matlab_subs_up():
         test_data = [[1, 2, 3],
                      [4, 5, 6],
                      [7, 8, 9]]  # Shape=3x3, Rank P=2
-        test_data = tf.Variable(test_data, dtype=tf.float32, name="test_data")
+        test_data = tf.constant(test_data, dtype=tf.float32, name="test_data")
         # Testing update
         d_0_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d0_idx")
         d_1_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d1_idx")
@@ -92,19 +92,16 @@ def test_matlab_subs_up():
                                           [d_0_idx, d_1_idx])
         # Testing increment
         # This time your reference will not be affected
-        dummy_ref = tf.Variable(tf.zeros([3, 3], dtype=tf.float32), name="dummy_ref")
-        test_inc = [3, 4, 5]
+        test_inc = [3, 4, 9]
         test_inc = tf.Variable(test_inc, dtype=tf.float32, name="test_increment")
-        increment = tf_utils.inc_tensor_els(dummy_ref,
+        increment = tf_utils.inc_tensor_els(updated,
                                             test_inc,
-                                            updated,
                                             [d_0_idx, d_1_idx])
         init = tf.global_variables_initializer()
         with tf.Session() as sess:
             sess.run(init)
             print('Update-Test Result: \n', sess.run(updated))
             print('Increment-Test Result: \n', sess.run(increment))
-            print('My reference is the same as before after increment:\n', sess.run(test_data))
 
 
 def test_create_one_hot():
@@ -117,7 +114,7 @@ def test_create_one_hot():
               sess.run(one_hot))
 
 
-def test_sorted_indx():
+def test_sorted_idx():
 
     test_data = [[4, 1, 8],
                  [10, 2, 36],
@@ -139,9 +136,77 @@ def test_sorted_indx():
               sess.run(sorted_idx_desc))
 
 
+def test_boolean_cast():
+
+    test_data = [True, False, False, True, True]
+    test_data = tf.Variable(test_data, dtype=tf.bool, name="test_data")
+    casting_op = tf.cast(test_data, tf.float32)
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+        print('Result of casting operation: \n', sess.run(casting_op))
+
+
+def test_gather_nd():
+
+    test_data = [[4, 1, 8],
+                 [10, 2, 36],
+                 [44, 55, 22]]
+    test_data = tf.Variable(test_data, dtype=tf.float32, name="test_data")
+    first_dim = tf.constant([0, 1, 2], dtype=tf.int64)
+    secon_dim = tf.constant([1, 2, 1], dtype=tf.int64)
+    indices = tf.stack([first_dim, secon_dim], axis=1)
+    fetched = tf.gather_nd(test_data, indices)
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+        print('Indices : ', sess.run(indices))
+        print('Result of gathering operation: \n', sess.run(fetched))
+
+
+def test_foldl():
+
+    test_data = [[2, 2, 2],
+                 [1, 1, 1],
+                 [3, 3, 3]]
+    test_data = tf.constant(test_data, dtype=tf.float32, name="test_data")
+    acc = tf.zeros([3, 3], dtype=tf.float32)
+
+    def step_(a, x):
+        d_0_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d0_idx")
+        d_1_idx = tf.constant([0, 1, 2], dtype=tf.int32, name="d1_idx")
+        increment = tf_utils.inc_tensor_els(a,
+                                            x,
+                                            [d_0_idx, d_1_idx])
+        return increment
+
+    out = tf.foldl(step_, elems=test_data, initializer=acc, parallel_iterations=1)
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+        print('Result of foldl operation: \n', sess.run(out))
+
+
+def test_where():
+
+    test_data = [[2, 0, 0],
+                 [1, 0, 1],
+                 [3, 0, 3]]
+    test_data = tf.constant(test_data, dtype=tf.float32, name="test_data")
+    gt_zero = tf.where(tf.greater(test_data, tf.constant([0], dtype=tf.float32)))
+
+    init = tf.global_variables_initializer()
+    with tf.Session() as sess:
+        sess.run(init)
+        print('Result of where operation: \n', sess.run(gt_zero))
+
 if __name__ == "__main__":
 
     # test_scatter_nd_add()
-    test_matlab_subs_up()
+    # test_matlab_subs_up()
     # test_create_one_hot()
-    # test_sorted_indx()
+    # test_sorted_idx()
+    # test_boolean_cast()
+    # test_gather_nd()
+    test_foldl()
+    # test_where()

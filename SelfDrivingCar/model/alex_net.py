@@ -35,9 +35,7 @@ from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
 from tflearn.layers.estimator import regression
 
-import tensorflow as tf
-
-NUM_EPOCHS=10
+NUM_EPOCHS=3
 
 
 def build_alex_net(input_shape,
@@ -52,46 +50,31 @@ def build_alex_net(input_shape,
     network = input_data(shape=input_shape)
     weight_init = normal(mean=0.0, stddev=0.01)
     network = conv_2d(network,
-                      96, 11, strides=4,
-                      activation='relu',
-                      weights_init=weight_init)
+                      96, 11, strides=4,)
     network = max_pool_2d(network, 3, strides=2)
     network = local_response_normalization(network)
     network = conv_2d(network,
-                      256, 5, activation='relu',
-                      weights_init=weight_init,
-                      bias_init=tf.constant_initializer(1.0))
+                      256, 5, activation='relu')
     network = max_pool_2d(network, 3, strides=2)
     network = local_response_normalization(network)
     network = conv_2d(network,
-                      384, 3, activation='relu',
-                      weights_init=weight_init)
+                      384, 3, activation='relu')
     network = conv_2d(network,
-                      384, 3, activation='relu',
-                      weights_init=weight_init,
-                      bias_init=tf.constant_initializer(1.0))
+                      384, 3, activation='relu')
     network = conv_2d(network,
-                      256, 3, activation='relu',
-                      weights_init=weight_init,
-                      bias_init=tf.constant_initializer(1.0))
+                      256, 3, activation='relu')
     network = max_pool_2d(network, 3, strides=2)
     network = local_response_normalization(network)
     network = fully_connected(network,
-                              4096, activation='tanh',
-                              weights_init=weight_init)
+                              4096, activation='tanh')
     network = dropout(network, 0.5)
     network = fully_connected(network,
-                              4096, activation='tanh',
-                              weights_init=weight_init)
+                              4096, activation='tanh')
     network = dropout(network, 0.5)
     network = fully_connected(network,
-                              num_classes, activation='softmax',
-                              weights_init=weight_init)
+                              num_classes, activation='softmax')
     # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)
-    momentum = Momentum(learning_rate=0.01,
-                        lr_decay=0.0005,
-                        decay_step=100,
-                        momentum=0.9)
+    momentum = Momentum(learning_rate=0.01, momentum=0.9)
     network = regression(network,
                          optimizer=momentum,
                          loss='categorical_crossentropy')
@@ -106,9 +89,11 @@ def train(network,
 
     print('Training AlexNet...')
     model = DNN(network,
-                checkpoint_path=model_name,
+                checkpoint_path="checkpoints/"+model_name,
+                best_checkpoint_path="checkpoints/best_checkpoint",
                 max_checkpoints=1,
-                tensorboard_verbose=2)
+                tensorboard_verbose=2,
+                tensorboard_dir="log_folder")
     model.fit(input_,
               labels,
               n_epoch=NUM_EPOCHS,

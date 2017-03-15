@@ -29,11 +29,10 @@
     **********************************************************************************
 '''
 
-import math as math
-
 import tensorflow as tf
-from metalearning_tf.model.memory import MemoryUnit
 
+import metalearning_tf.utils.tf_utils as tf_utils
+from metalearning_tf.model.memory import MemoryUnit
 from metalearning_tf.model.controller_unit import ControllerUnit
 
 
@@ -59,6 +58,12 @@ class NNModel(object):
     # Placeholders
     __input_ph = None
     __target_ph = None
+
+    # Used for chain call of generate_model(), loss(), train()
+    __labels = None
+    __logits = None
+    __loss = None
+    __train_op = None
 
     def __init__(self,
                  batch_size=16,
@@ -89,6 +94,20 @@ class NNModel(object):
                                    num_read_heads,
                                    gamma)
 
+    def prepare_dict(self, input_, target):
+
+        feed_dict = {
+            self.__input_ph: input_,
+            self.__target_ph: target
+        }
+        return feed_dict
+
+    def get_memory(self):
+        return self.__memory
+
+    def get_controller(self):
+        return self.__controller
+
     def _create_placeholders(self, seq_len):
         '''
         Generates placeholder variables for feeding dictionary with
@@ -116,7 +135,7 @@ class NNModel(object):
         print('Creating output weights and bias...')
         num_weights = self.__controller_size+self.__num_read_heads*self.__memory_size[1]
         with tf.variable_scope(NNModel.LAYER_NN_OUT):
-            init = tf.truncated_normal_initializer(stddev=1.0 / math.sqrt(float(num_weights)))
+            init = tf_utils.glorot_uniform_init([num_weights, self.__num_classes])
             tf.get_variable(NNModel.NODE_W_OUT,
                             [num_weights,
                              self.__num_classes],
@@ -140,16 +159,22 @@ class NNModel(object):
         print()
         print()
 
-    def prepare_dict(self, input_, target):
+    def _step(self, acc, x_t):
+        '''
+        :param acc: Accumulator for [c_tm1, h_tm1, m_tm1, r_tm1, wr_tm1, wu_tm1]
+        :param x_t: Current input at time t
+        :return: None
+        '''
 
-        feed_dict = {
-            self.__input_ph: input_,
-            self.__target_ph: target
-        }
-        return feed_dict
+        c_tm1, h_tm1, m_tm1, r_tm1, wr_tm1, wu_tm1 = acc
+        c_t, h_t, k_t, a_t, s_t = self.__controller.inference(x_t, c_tm1, h_tm1, r_tm1)
+        m_t, r_t, wr_t, wu_t = self.__memory.update_mem(m_tm1, wr_tm1, wu_tm1,
+                                                        k_t, a_t, s_t)
+        # Input to the next step
+        return c_t, h_t, m_t, r_t, wr_t, wu_t
 
     @staticmethod
-    def get_node_out():
+    def _get_node_out():
         '''
         Don't call before building is complete!!!
 
@@ -161,27 +186,7 @@ class NNModel(object):
             b_o = tf.get_variable(NNModel.NODE_B_OUT)
         return w_o, b_o
 
-    def get_memory(self):
-        return self.__memory
-
-    def get_controller(self):
-        return self.__controller
-
-    def _step(self, acc, x_t):
-        '''
-        :param acc: Accumulator for [c_tm1, h_tm1, m_tm1, r_tm1, wr_tm1, wu_tm1]
-        :param x_t: Current input at time t
-        :return: None
-        '''
-
-        c_tm1, h_tm1, m_tm1, r_tm1, wr_tm1, wu_tm1 = acc
-        c_t, h_t, k_t, a_t, s_t = ControllerUnit.inference(x_t, c_tm1, h_tm1, r_tm1)
-        m_t, r_t, wr_t, wu_t = self.__memory.update_mem(m_tm1, wr_tm1, wu_tm1,
-                                                        k_t, a_t, s_t)
-        # Input to the next step
-        return c_t, h_t, m_t, r_t, wr_t, wu_t
-
-    def generate_models(self):
+    def generate_model(self):
 
         seq_len = self.__target_ph.get_shape().as_list()[1]  # Check _create_placeholders method for explanation
         out_shape = (self.__batch_size*seq_len, self.__num_classes)
@@ -216,33 +221,44 @@ class NNModel(object):
         print('****************************************************************')
 
         # As for computing output, only h_t & r_t suffice:
-        # h_t = BSxSLxCS / r_t = BSxSLx(NR.MIL)
+        # h_t = SLxBSxCS / r_t = SLxBSx(NR.MIL)
         req_output = tf.transpose(tf.concat([nn_output[1], nn_output[3]], axis=2),
                                   perm=[1, 0, 2])  # BSxSLx(CS+NR.MIL)
-
         # Calculate the predictions:
-        [w_o, b_o] = NNModel.get_node_out()
-        preact = tf.matmul(tf.reshape(req_output, (self.__batch_size*seq_len, -1)), w_o)  # BSxSLx(num_classes)
-        preact = tf.add(tf.reshape(preact, (self.__batch_size, seq_len, self.__num_classes)), b_o)
-        logits = tf.nn.softmax(tf.reshape(preact, out_shape))  # (BS.SL)x(num_classes)
+        [w_o, b_o] = NNModel._get_node_out()
+        preact = tf.matmul(tf.reshape(req_output, (self.__batch_size*seq_len, -1)), w_o)
+        preact = tf.add(tf.reshape(preact,
+                                   (self.__batch_size, seq_len, self.__num_classes)), b_o)  # BSxSLx(num_classes)
+        logits = tf.reshape(preact, out_shape)  # (BS.SL)x(num_classes)
 
+        self.__labels = tf.reshape(labels, [-1])
+        self.__logits = logits  # NEVER EVER APPLY SOFTMAX FOR IT WILL BE APPLIED WHEN LOSS FUNCTION IS DEFINED
+        return self
+
+    def loss(self):
         # Create loss function using predictions (logits) and actual output (labels)
-        labels = tf.reshape(labels, [-1])
-        cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=labels,
-            logits=logits)
-        loss = tf.reduce_mean(cross_entropy, name="loss")
+        one_hot_labels = tf_utils.create_one_hot_var([self.__labels.get_shape().as_list()[0]],
+                                                     self.__num_classes,
+                                                     on_idx=self.__labels)
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
+            labels=one_hot_labels,
+            logits=self.__logits)
 
+        self.__loss = tf.reduce_mean(cross_entropy, name="loss")
+        return self
+
+    def train(self):
         # Create an AdamOptimizer
         optimizer = tf.train.AdamOptimizer(self.__learning_rate)
         global_step = tf.Variable(0, name="global_step", trainable=False)
         # A function returns the cost against current loss (a.k.a. 'score' in original implementation)
         # and updates parameters in the model.
-        train_op = optimizer.minimize(loss,
-                                      global_step=global_step,
-                                      name="optimizer")
+        self.__train_op = optimizer.minimize(self.__loss,
+                                             global_step=global_step,
+                                             name="optimizer")
+        return self
 
-        # A scalar / called 'accuracy' in original implementation
+    def get_all(self):
 
-        return loss, train_op
+        return self.__labels, self.__logits, self.__loss, self.__train_op
 
