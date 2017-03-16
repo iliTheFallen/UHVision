@@ -72,7 +72,7 @@ def preprocess_data(omniglot_generator, num_classes):
                         omniglot_generator.nb_samples_per_class * \
                         omniglot_generator.max_iter * \
                         omniglot_generator.batch_size
-    num_test = int(total_num_samples * 0.1)
+    num_test = int(total_num_samples * 0.05)
     num_train = int(total_num_samples - num_test)
     train_X = X[0:num_train, :, :]
     train_y = y[0:num_train, :]
@@ -91,7 +91,7 @@ def main():
                                          nb_samples_per_class=10,  # # of samples per class
                                          max_rotation=0,
                                          max_shift=0,
-                                         max_iter=10)
+                                         max_iter=1000)
     st = time.time()
     try:
         # Build the network
