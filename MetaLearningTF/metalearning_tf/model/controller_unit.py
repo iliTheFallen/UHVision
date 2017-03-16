@@ -124,7 +124,7 @@ class ControllerUnit(object):
         print('Controller Output Nodes...')
         with tf.variable_scope(ControllerUnit.LAYER_OUTPUT):
             # Weight and Bias for 'key'
-            init = tf_utils.glorot_uniform_init([self.__num_read_heads,
+            init = tf_utils.glorot_uniform_init([self.__controller_size,
                                                  self.__memory_size[1]])
             tf.get_variable(ControllerUnit.NODE_OUT_W_KEY,
                             [self.__num_read_heads,
