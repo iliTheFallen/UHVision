@@ -83,6 +83,9 @@ def main():
                                          max_rotation=0,
                                          max_shift=0,
                                          max_iter=None)
+    # Use the first sample set as test data
+    e, (test_input, test_target) = sample_generator.next()
+    test_input, test_target = preproc_data(test_input, test_target)
     # Build the network
     with tf.Graph().as_default(), tf.device('/cpu:0'):
         print('Building AlexNet...')
@@ -103,11 +106,11 @@ def main():
             try:
                 print('Training...')
                 for e, (input_, target) in sample_generator:
-                    new_input_, new_target = preproc_data(input_, target)
-                    feed_dict = {input_ph: new_input_,
-                                 target_ph: new_target}
-                    if e > 0 and e % 100 == 0:
+                    # Testing...
+                    if (e-1) > 0 and ((e-1) % 100 == 0):
                         print('Evaluating the model...')
+                        feed_dict = {input_ph: test_input,
+                                     target_ph: test_target}
                         acc = net_eval.evaluate(feed_dict,
                                                 acc_op.get_tensor(),
                                                 batch_size=BATCH_SIZE*SEQ_LENGTH)
@@ -115,9 +118,12 @@ def main():
                         print('Loss for %d episodes: %.6f' % (len(losses), np.mean(np.asarray(losses))))
                         print('Training...')
                         losses = []
-                    else:
-                        _, loss = sess.run([train_op, loss_fn], feed_dict=feed_dict)
-                        losses.append(loss)
+                    # Either train or continue to train...
+                    new_input_, new_target = preproc_data(input_, target)
+                    feed_dict = {input_ph: new_input_,
+                                 target_ph: new_target}
+                    _, loss = sess.run([train_op, loss_fn], feed_dict=feed_dict)
+                    losses.append(loss)
             except KeyboardInterrupt:
                 print('Elapsed Time: %ld' %(time.time()-st))
                 pass
