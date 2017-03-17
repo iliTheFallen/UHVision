@@ -27,58 +27,49 @@
     **********************************************************************************
 '''
 
+import tensorflow as tf
+from tflearn.helpers.evaluator import Evaluator
+from tflearn.metrics import Accuracy
+
 import time as time
 import numpy as np
 
 from metalearning_tf.data.generators import OmniglotGenerator
-
 import model.alex_net as alex
 
 IM_W = 20
 IM_H = 20
+NUM_CLASSES = 5
+NUM_SAMPLES_PER_CLASS = 10
+SEQ_LENGTH = NUM_CLASSES * NUM_SAMPLES_PER_CLASS
+BATCH_SIZE = 16
+NUM_CHANNELS = 1
 
 
-def preprocess_data(omniglot_generator, num_classes):
+def preproc_data(input_, target):
+    '''
 
-    X = None
-    y = None
+    :param input_: BSxSLx(IMW*IMH)
+    :param target: BSxSLx1
+    :return:
+    '''
 
-    print('Preprocessing input data...')
-    e, (input_, target) = omniglot_generator.next()
-    in_shape = input_.shape
-    tar_shape = target.shape
-    one_shot_1st_dim = np.arange(0, tar_shape[0] * tar_shape[1]).tolist()
-    # There is no sequence notion in this context. Our input_ will be of size:
-    # (BS.SL)x(WxH). A 3D cube whose each slight is an input_
-    input_ = input_.reshape(in_shape[0] * in_shape[1], in_shape[2])
-    input_ = input_.reshape(in_shape[0] * in_shape[1], IM_W, IM_H, 1)
-    target = target.reshape(tar_shape[0] * tar_shape[1])
-    one_shot_tar = np.zeros([tar_shape[0] * tar_shape[1], num_classes], np.float32)
-    one_shot_tar[one_shot_1st_dim, target.tolist()] = 1.0
-    X = input_
-    y = one_shot_tar
-    for e, (input_, target) in omniglot_generator:
-        print('Current episode: %d' % e)
-        # Stack them up vertically
-        input_ = input_.reshape(in_shape[0] * in_shape[1], in_shape[2])
-        input_ = input_.reshape(in_shape[0] * in_shape[1], IM_W, IM_H, 1)
-        target = target.reshape(tar_shape[0] * tar_shape[1])
-        one_shot_tar = np.zeros([tar_shape[0] * tar_shape[1], num_classes], np.float32)
-        one_shot_tar[one_shot_1st_dim, target.tolist()] = 1.0
-        X = np.concatenate((X, input_), axis=0)
-        y = np.concatenate((y, one_shot_tar), axis=0)
+    new_input_ = input_.reshape(BATCH_SIZE*SEQ_LENGTH, IM_H, IM_W, NUM_CHANNELS)
+    new_target = np.zeros([BATCH_SIZE*SEQ_LENGTH, NUM_CLASSES], dtype=np.float32)
+    new_target[np.arange(BATCH_SIZE*SEQ_LENGTH), target.reshape(-1)] = 1.0
 
-    total_num_samples = omniglot_generator.nb_samples * \
-                        omniglot_generator.nb_samples_per_class * \
-                        omniglot_generator.max_iter * \
-                        omniglot_generator.batch_size
-    num_test = int(total_num_samples * 0.05)
-    num_train = int(total_num_samples - num_test)
-    train_X = X[0:num_train, :, :]
-    train_y = y[0:num_train, :]
-    test_X = X[num_train:, :, :]
-    test_y = y[num_train:, :]
-    return train_X, train_y, test_X, test_y
+    return new_input_, new_target
+
+
+def create_placeholders():
+
+    input_ph = tf.placeholder(tf.float32,
+                                     (BATCH_SIZE * SEQ_LENGTH, IM_W, IM_H, NUM_CHANNELS),
+                                     "input_ph")
+    target_ph = tf.placeholder(tf.float32,
+                               (BATCH_SIZE * SEQ_LENGTH, NUM_CLASSES),
+                               "target_ph")
+    return input_ph, target_ph
 
 
 def main():
@@ -86,27 +77,50 @@ def main():
     # Load data as was defined in the original code in Theano
     # As in Alex's paper; data augmentation is provided via shifting/rotation
     sample_generator = OmniglotGenerator(data_folder='../MetaLearningTF/omni_samples/',
-                                         batch_size=16,  # Each call to the next() operator fetches this many samples
-                                         nb_samples=5,  # Actually, it is # of classes
-                                         nb_samples_per_class=10,  # # of samples per class
+                                         batch_size=BATCH_SIZE,  # Each call to the next() operator fetches this many samples
+                                         nb_samples=NUM_CLASSES,  # Actually, it is # of classes
+                                         nb_samples_per_class=NUM_SAMPLES_PER_CLASS,  # # of samples per class
                                          max_rotation=0,
                                          max_shift=0,
-                                         max_iter=1000)
-    st = time.time()
-    try:
-        # Build the network
-        network = alex.build_alex_net([IM_W, IM_H, 1], sample_generator.nb_samples)
-        # Extract training data
-        train_X, train_y, test_X, test_y = preprocess_data(sample_generator,
-                                                           sample_generator.nb_samples)
-        # Train the network
-        model = alex.train(network, train_X, train_y, 16, 'alexnet')
-        print('Evaluating the model...')
-        metric = model.evaluate(test_X, test_y, batch_size=16)
-        print('Metric: ', metric)
-    except KeyboardInterrupt:
-        print('Elapsed Time: %ld' %(time.time()-st))
-        pass
+                                         max_iter=None)
+    # Build the network
+    with tf.Graph().as_default(), tf.device('/cpu:0'):
+        print('Building AlexNet...')
+        acc_op = Accuracy(name="accuracy_alex_net")
+        input_ph, target_ph = create_placeholders()
+        alex_net = alex.build_alex_net([BATCH_SIZE*SEQ_LENGTH, IM_W, IM_H, NUM_CHANNELS],
+                                       input_ph,
+                                       sample_generator.nb_samples)
+        loss_fn, train_op = alex.train(alex_net, target_ph)
+        acc_op.build(alex_net, target_ph, input_ph)
+        init = tf.global_variables_initializer()
+        with tf.Session() as sess:
+            net_eval = Evaluator(alex_net, session=sess)
+            print('Initializing variables...')
+            sess.run(init)
+            st = time.time()
+            losses = []
+            try:
+                print('Training...')
+                for e, (input_, target) in sample_generator:
+                    new_input_, new_target = preproc_data(input_, target)
+                    feed_dict = {input_ph: new_input_,
+                                 target_ph: new_target}
+                    if e > 0 and e % 100 == 0:
+                        print('Evaluating the model...')
+                        acc = net_eval.evaluate(feed_dict,
+                                                acc_op.get_tensor(),
+                                                batch_size=BATCH_SIZE*SEQ_LENGTH)
+                        print('Accuracy for episode %05d: %s' % (e, acc))
+                        print('Loss for %d episodes: %.6f' % (100, np.mean(np.asarray(losses))))
+                        print('Training...')
+                        losses = []
+                    else:
+                        _, loss = sess.run([train_op, loss_fn], feed_dict=feed_dict)
+                        losses.append(loss)
+            except KeyboardInterrupt:
+                print('Elapsed Time: %ld' %(time.time()-st))
+                pass
 
 
 if __name__ == "__main__":

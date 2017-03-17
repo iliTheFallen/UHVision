@@ -27,81 +27,79 @@
     **********************************************************************************
 '''
 
-from tflearn import DNN
-from tflearn.initializations import normal as normal
+import tensorflow as tf
 from tflearn.layers.core import input_data, dropout, fully_connected
 from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
-from tflearn.layers.estimator import regression
-
-NUM_EPOCHS=3
-
+from tflearn.objectives import categorical_crossentropy
 
 def build_alex_net(input_shape,
+                   input_ph,
                    num_classes):
 
-    print('Building AlexNet...')
     # input_shape does not have the dimension for batch size.
     # It is specified in training phase. That is why we have
     # None for the 1st dimension
     # input_shape.insert(0, None)
     # Building network...
-    network = input_data(shape=input_shape)
-    weight_init = normal(mean=0.0, stddev=0.01)
+    network = input_data(shape=input_shape,
+                         placeholder=input_ph)
     network = conv_2d(network,
-                      96, 11, strides=4,)
+                      96, 11, strides=4,
+                      activation="relu",
+                      scope="conv1st")
     network = max_pool_2d(network, 3, strides=2)
     network = local_response_normalization(network)
     network = conv_2d(network,
-                      256, 5, activation='relu')
+                      256, 5,
+                      activation="relu",
+                      scope="conv2nd")
     network = max_pool_2d(network, 3, strides=2)
     network = local_response_normalization(network)
     network = conv_2d(network,
-                      384, 3, activation='relu')
+                      384, 3,
+                      activation="relu",
+                      scope="conv3rd")
     network = conv_2d(network,
-                      384, 3, activation='relu')
+                      384, 3,
+                      activation="relu",
+                      scope="conv4th")
     network = conv_2d(network,
-                      256, 3, activation='relu')
+                      256, 3,
+                      activation="relu",
+                      scope="conv5th")
     network = max_pool_2d(network, 3, strides=2)
     network = local_response_normalization(network)
     network = fully_connected(network,
-                              4096, activation='tanh')
+                              4096,
+                              activation="tanh",
+                              scope="fully1st")
     network = dropout(network, 0.5)
     network = fully_connected(network,
-                              4096, activation='tanh')
+                              4096,
+                              activation="tanh",
+                              scope="fully2nd")
     network = dropout(network, 0.5)
+    # Last layer of the Alexnet will be dropped out for connecting its raw-output to the RNN
     network = fully_connected(network,
-                              num_classes, activation='softmax')
-    # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)
-    momentum = Momentum(learning_rate=0.01, momentum=0.9)
-    network = regression(network,
-                         optimizer=momentum,
-                         loss='categorical_crossentropy')
+                              num_classes,
+                              activation="softmax",
+                              scope="fully3rd")
     return network
 
 
 def train(network,
-          input_,
-          labels,
-          batch_size,
-          model_name):
+          target_ph,
+          learning_rate=0.01,
+          momentum=0.9):
 
-    print('Training AlexNet...')
-    model = DNN(network,
-                checkpoint_path="checkpoints/"+model_name,
-                best_checkpoint_path="checkpoints/best_checkpoint",
-                max_checkpoints=1,
-                tensorboard_verbose=2,
-                tensorboard_dir="log_folder")
-    model.fit(input_,
-              labels,
-              n_epoch=NUM_EPOCHS,
-              validation_set=0.1,  # 10% of training data will be used for validation
-              shuffle=True,
-              show_metric=True,
-              batch_size=batch_size,
-              snapshot_step=batch_size,  # Save the model at every this many steps.
-              snapshot_epoch=False,  # We don't want snapshot at the end of each epoch
-              run_id=model_name)
-    return model
+    # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)
+    momentum = Momentum(learning_rate=learning_rate,
+                        momentum=momentum)
+    loss = categorical_crossentropy(network, target_ph)
+    global_step = tf.Variable(0, name="global_step", trainable=False)
+    train_op = momentum.get_tensor().minimize(loss,
+                                              global_step=global_step,
+                                              name="minimizer")
+    return loss, train_op
