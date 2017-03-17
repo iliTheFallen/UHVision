@@ -111,8 +111,8 @@ def main():
                         acc = net_eval.evaluate(feed_dict,
                                                 acc_op.get_tensor(),
                                                 batch_size=BATCH_SIZE*SEQ_LENGTH)
-                        print('Accuracy for episode %05d: %s' % (e, acc))
-                        print('Loss for %d episodes: %.6f' % (100, np.mean(np.asarray(losses))))
+                        print('Accuracy for episode %05d: %.6f' % (e, acc[0]))
+                        print('Loss for %d episodes: %.6f' % (len(losses), np.mean(np.asarray(losses))))
                         print('Training...')
                         losses = []
                     else:
