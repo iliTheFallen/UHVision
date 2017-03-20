@@ -43,7 +43,7 @@ def glorot_uniform_init(shape, dtype=tf.float32):
         high = np.sqrt(6. / shape)
     else:
         high = np.sqrt(6. / (np.sum(shape[:2]) * np.prod(shape[2:])))
-    return tf.random_uniform_initializer(minval=-high, maxval=high, dtype=dtype)
+    return tf.random_uniform_initializer(minval=-1*high, maxval=high, dtype=dtype)
 
 
 def create_one_hot_var(shape, depth, dtype=tf.float32, on_idx=None):

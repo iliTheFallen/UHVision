@@ -95,18 +95,18 @@ class ControllerUnit(object):
         # Note that in this paper, they present previous output label as
         # input to the system; hence total number of inputs is equal to
         # "input_size + num_classes"
-        num_inputs = self.__input_size+self.__num_classes
         print('Hidden Layer Nodes...')
-        with tf.variable_scope(ControllerUnit.LAYER_HIDDEN, reuse=False):
+        with tf.variable_scope(ControllerUnit.LAYER_HIDDEN):
             # input-->forget-->output-->approximated cell content
             # Weights associating input to the current hidden units
+            num_inputs = self.__input_size + self.__num_classes
             init = tf_utils.glorot_uniform_init([num_inputs, 4 * self.__controller_size])
             tf.get_variable(ControllerUnit.NODE_HIDDEN_W_XH,
                             [num_inputs, 4 * self.__controller_size],
                             initializer=init)
             tf.get_variable(ControllerUnit.NODE_HIDDEN_BI,
                             [4 * self.__controller_size],
-                            initializer=tf.zeros_initializer())
+                            initializer=tf.constant_initializer(0.0))
             # Weights associating previously read data from the memory to the current hidden units
             num_tot_reads = self.__num_read_heads*self.__memory_size[1]  # Number of total read weights
             init = tf_utils.glorot_uniform_init([num_tot_reads, 4 * self.__controller_size])
@@ -133,7 +133,7 @@ class ControllerUnit(object):
                             initializer=init)
             tf.get_variable(ControllerUnit.NODE_OUT_B_KEY,
                             [self.__num_read_heads, self.__memory_size[1]],
-                            initializer=tf.zeros_initializer())
+                            initializer=tf.constant_initializer(0.0))
             # Weight and Bias for 'add'
             init = tf_utils.glorot_uniform_init([self.__controller_size,
                                                  self.__memory_size[1]])
@@ -144,7 +144,7 @@ class ControllerUnit(object):
                             initializer=init)
             tf.get_variable(ControllerUnit.NODE_OUT_B_ADD,
                             [self.__num_read_heads, self.__memory_size[1]],
-                            initializer=tf.zeros_initializer())
+                            initializer=tf.constant_initializer(0.0))
             # Weight and Bias for 'sigma'
             init = tf_utils.glorot_uniform_init([self.__controller_size,
                                                  1])
@@ -153,7 +153,7 @@ class ControllerUnit(object):
                             initializer=init)
             tf.get_variable(ControllerUnit.NODE_OUT_B_SIG,
                             [self.__num_read_heads, 1],
-                            initializer=tf.zeros_initializer())
+                            initializer=tf.constant_initializer(0.0))
         print()
         print()
 
@@ -207,7 +207,7 @@ class ControllerUnit(object):
         :param r_tm1: Previous output of the read head at time t-1
          (Memory meta_tf calculates it) -- BSx(NR.MIL)
 
-        :return: None
+        :return: c_t, h_t, k_t, a_t, s_t
         '''
 
         print('******************Executing Controller Unit Ops...')
@@ -225,21 +225,22 @@ class ControllerUnit(object):
         # End of for-Loop
         print('Controller State Ops...')
         c_t = tf.add(tf.multiply(gate_f, c_tm1),
-                     tf.multiply(gate_i, approx))
-        h_t = tf.multiply(gate_o, tf.nn.tanh(c_t))
+                     tf.multiply(gate_i, approx))  # BSxCS
+        h_t = tf.multiply(gate_o, tf.nn.tanh(c_t))  # BSxCS
         print('Controller Output Ops...')
+        # w_key = NRxCSxMIL b_key = NRxMIL
+        # w_add = NRxCSxMIL b_add = NRxMIL
+        # w_key = NRxCSx1 b_key = NRx1
         w_key, b_key, w_add, b_add, w_sig, b_sig = ControllerUnit.get_node_out()
         # Calculating key, add, and alpha (learnable sigmoid gate parameter)
-        k_t = tf.matmul(h_t, tf.reshape(w_key, shape=(self.__controller_size,-1)))
-        k_t = tf.tanh(tf.reshape(k_t, shape=(self.__batch_size,
-                                             self.__num_read_heads,
-                                             self.__memory_size[1])) + b_key)  # BSxNRxMIL
-        a_t = tf.matmul(h_t, tf.reshape(w_add, shape=(self.__controller_size, -1)))
-        a_t = tf.tanh(tf.reshape(a_t, shape=(self.__batch_size,
-                                             self.__num_read_heads,
-                                             self.__memory_size[1])) + b_add)  # BSxNRxMIL
-        s_t = tf.matmul(h_t, tf.reshape(w_sig, shape=(self.__controller_size, -1)))
-        s_t = tf.sigmoid(tf.reshape(s_t, shape=(self.__batch_size, self.__num_read_heads, 1)) + b_sig)  # BSxNRx1
+        k_t = tf.tensordot(h_t, w_key, axes=[[1], [1]])
+        k_t = tf.tanh(tf.add(k_t, b_key))  # BSxNRxMIL
+
+        a_t = tf.tensordot(h_t, w_add, axes=[[1], [1]])
+        a_t = tf.tanh(tf.add(a_t, b_add))  # BSxNRxMIL
+
+        s_t = tf.tensordot(h_t, w_sig, axes=[[1], [1]])
+        s_t = tf.tanh(tf.add(s_t, b_sig))  # BSxNRx1
 
         return c_t, h_t, k_t, a_t, s_t
 

@@ -102,7 +102,7 @@ def main():
                  controller_size=200,
                  memory_size=(128, 40),
                  num_read_heads=4,
-                 learning_rate=0.001,
+                 learning_rate=1e-3,
                  gamma=0.95)
     with tf.Graph().as_default():
         # Build common tensors used throughout entire session

@@ -34,6 +34,7 @@ from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
 from tflearn.objectives import categorical_crossentropy
 
+
 def build_alex_net(input_shape,
                    input_ph,
                    num_classes):
@@ -91,7 +92,7 @@ def build_alex_net(input_shape,
 
 def train(network,
           target_ph,
-          learning_rate=0.01,
+          learning_rate=0.001,
           momentum=0.9):
 
     # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)

@@ -37,8 +37,8 @@ import numpy as np
 from metalearning_tf.data.generators import OmniglotGenerator
 import model.alex_net as alex
 
-IM_W = 20
-IM_H = 20
+IM_W = 105
+IM_H = 105
 NUM_CLASSES = 5
 NUM_SAMPLES_PER_CLASS = 10
 SEQ_LENGTH = NUM_CLASSES * NUM_SAMPLES_PER_CLASS
@@ -82,12 +82,13 @@ def main():
                                          nb_samples_per_class=NUM_SAMPLES_PER_CLASS,  # # of samples per class
                                          max_rotation=0,
                                          max_shift=0,
+                                         img_size=(IM_W, IM_H),
                                          max_iter=None)
     # Use the first sample set as test data
     e, (test_input, test_target) = sample_generator.next()
     test_input, test_target = preproc_data(test_input, test_target)
     # Build the network
-    with tf.Graph().as_default(), tf.device('/cpu:0'):
+    with tf.Graph().as_default():
         print('Building AlexNet...')
         acc_op = Accuracy(name="accuracy_alex_net")
         input_ph, target_ph = create_placeholders()
@@ -106,7 +107,7 @@ def main():
             try:
                 print('Training...')
                 for e, (input_, target) in sample_generator:
-                    # Testing...
+                    # Every 100 samples, test the trained model against the test data...
                     if (e-1) > 0 and ((e-1) % 100 == 0):
                         print('Evaluating the model...')
                         feed_dict = {input_ph: test_input,
@@ -114,7 +115,7 @@ def main():
                         acc = net_eval.evaluate(feed_dict,
                                                 acc_op.get_tensor(),
                                                 batch_size=BATCH_SIZE*SEQ_LENGTH)
-                        print('Accuracy for episode %05d: %.6f' % (e, acc[0]))
+                        print('Accuracy for episode %05d: %.6f' % (e-1, acc[0]))
                         print('Loss for %d episodes: %.6f' % (len(losses), np.mean(np.asarray(losses))))
                         print('Training...')
                         losses = []

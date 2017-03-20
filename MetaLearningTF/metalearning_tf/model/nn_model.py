@@ -249,7 +249,7 @@ class NNModel(object):
 
     def train(self):
         # Create an AdamOptimizer
-        optimizer = tf.train.AdamOptimizer(self.__learning_rate)
+        optimizer = tf.train.AdamOptimizer(learning_rate=self.__learning_rate)
         global_step = tf.Variable(0, name="global_step", trainable=False)
         # A function returns the cost against current loss (a.k.a. 'score' in original implementation)
         # and updates parameters in the model.

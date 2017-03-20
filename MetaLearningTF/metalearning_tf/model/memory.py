@@ -127,7 +127,7 @@ class MemoryUnit(object):
             wlu_tm1 = tf_utils.get_sorted_idx(wu_tm1,
                                               wu_tm1.get_shape().as_list(),
                                               self.__num_read_heads,
-                                              is_ascending=False)  # BSxNR
+                                              is_ascending=True)  # BSxNR
             # Write-weights at time t
             # Broadcasting s_t via its 3rd dimension for its size is
             # BSxNRx1 while wr_tm1 is with the size of BSxNRxMS
