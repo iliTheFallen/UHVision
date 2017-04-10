@@ -35,7 +35,7 @@ import time as time
 import numpy as np
 
 from metalearning_tf.data.generators import OmniglotGenerator
-import model.alex_net as alex
+import model.modified_alex_net as alex
 
 IM_W = 105
 IM_H = 105

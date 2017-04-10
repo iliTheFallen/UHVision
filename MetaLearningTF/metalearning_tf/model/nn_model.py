@@ -9,7 +9,7 @@
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
     
-    UH Vison Libraries are distributed in the hope that it will be useful,
+    UH Vision Libraries are distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
@@ -61,7 +61,7 @@ class NNModel(object):
 
     # Used for chain call of generate_model(), loss(), train()
     __labels = None
-    __logits = None
+    __preds = None
     __loss = None
     __train_op = None
 
@@ -116,20 +116,22 @@ class NNModel(object):
         :param seq_len: How many times RNN is unrolled. Each sample input
          will be composed of this many number of samples in order to generate a meaningful
          output.
-        :return:
+        :return: input_ph, target_ph
         '''
         print('Generating placeholders...')
-        self.__input_ph = tf.placeholder(tf.float32,
-                                         (self.__batch_size, seq_len, self.__input_size),
-                                         "input_ph")
-        self.__target_ph = tf.placeholder(tf.int32,
-                                          (self.__batch_size, seq_len),
-                                          "target_ph")
+        with tf.name_scope("mannPH"):
+            input_ph = tf.placeholder(tf.float32,
+                                      (self.__batch_size, seq_len, self.__input_size),
+                                      "input_ph")
+            target_ph = tf.placeholder(tf.int32,
+                                       (self.__batch_size, seq_len),
+                                       "target_ph")
+        return input_ph, target_ph
 
     def _create_output_nodes(self):
         '''
 
-        :return:
+        :return: None
         '''
 
         print('Creating output weights and bias...')
@@ -146,15 +148,15 @@ class NNModel(object):
 
     def build(self, seq_len):
         '''
-        This method creates variables for components, which will be passed from
-         current step at time t to the next one at time t+1. Moreover, it generates
-         placeholders for feeding neural network.
+        Generates models for controller unit and memory, 
+         which will be passed from current step to the next one. 
+         Moreover, it creates placeholders for feeding neural network.
         :return:
         '''
         self.__controller.build()
         self.__memory.build()
         print('******************Building NN Model Variables/Placeholders...')
-        self._create_placeholders(seq_len)
+        self.__input_ph, self.__target_ph = self._create_placeholders(seq_len)
         self._create_output_nodes()
         print()
         print()
@@ -229,10 +231,10 @@ class NNModel(object):
         preact = tf.matmul(tf.reshape(req_output, (self.__batch_size*seq_len, -1)), w_o)
         preact = tf.add(tf.reshape(preact,
                                    (self.__batch_size, seq_len, self.__num_classes)), b_o)  # BSxSLx(num_classes)
-        logits = tf.reshape(preact, out_shape)  # (BS.SL)x(num_classes)
+        preds = tf.reshape(preact, out_shape)  # (BS.SL)x(num_classes)
 
         self.__labels = tf.reshape(labels, [-1])
-        self.__logits = logits  # NEVER EVER APPLY SOFTMAX FOR IT WILL BE APPLIED WHEN LOSS FUNCTION IS DEFINED
+        self.__preds = preds  # NEVER EVER APPLY SOFTMAX FOR IT WILL BE APPLIED WHEN LOSS FUNCTION IS DEFINED
         return self
 
     def loss(self):
@@ -242,7 +244,7 @@ class NNModel(object):
                                                      on_idx=self.__labels)
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(
             labels=one_hot_labels,
-            logits=self.__logits)
+            logits=self.__preds)
 
         self.__loss = tf.reduce_mean(cross_entropy, name="loss")
         return self
@@ -260,5 +262,5 @@ class NNModel(object):
 
     def get_all(self):
 
-        return self.__labels, self.__logits, self.__loss, self.__train_op
+        return self.__labels, self.__preds, self.__loss, self.__train_op
 
