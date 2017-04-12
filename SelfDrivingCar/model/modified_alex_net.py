@@ -39,7 +39,6 @@ from utils import loss_funcs as loss_func
 class ModifiedAlexNet(object):
 
     # Parameters
-    __scope = None
     __batch_size = None
     __num_channels = None
     __frame_size = None
@@ -61,7 +60,6 @@ class ModifiedAlexNet(object):
     __total_loss = None  # Loss function after adding regularization losses
 
     def __init__(self,
-                 scope,
                  images=None,
                  labels=None,
                  batch_size=1,
@@ -72,7 +70,6 @@ class ModifiedAlexNet(object):
                  learning_rate=0.001,
                  momentum=0.9):
 
-        self.__scope = scope
         self.__batch_size = batch_size
         self.__num_channels = num_channels
         self.__frame_size = frame_size
@@ -86,8 +83,8 @@ class ModifiedAlexNet(object):
                               self.__frame_size[1],
                               self.__num_channels]
         self.__output_shape = [self.__batch_size, self.__num_classes]
-
-        if not images and not labels:
+        # Tensors are objects. Use 'is not' when you check whether it is empty or not
+        if images is not None and labels is not None:
             self.__input_ph = images
             self.__target_ph = labels
         else:
@@ -126,7 +123,7 @@ class ModifiedAlexNet(object):
         network = conv_2d(network,
                           96, 11, strides=4,
                           activation="relu",
-                          scope="conv1st",
+                          scope="alex_net/conv1st",
                           weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
@@ -134,7 +131,7 @@ class ModifiedAlexNet(object):
         network = conv_2d(network,
                           256, 5,
                           activation="relu",
-                          scope="conv2nd",
+                          scope="alex_net/conv2nd",
                           weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
@@ -142,19 +139,19 @@ class ModifiedAlexNet(object):
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
-                          scope="conv3rd",
+                          scope="alex_net/conv3rd",
                           weight_decay=0.0,
                           regularizer='L2')
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
-                          scope="conv4th",
+                          scope="alex_net/conv4th",
                           weight_decay=0.0,
                           regularizer='L2')
         network = conv_2d(network,
                           256, 3,
                           activation="relu",
-                          scope="conv5th",
+                          scope="alex_net/conv5th",
                           weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
@@ -162,14 +159,14 @@ class ModifiedAlexNet(object):
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
-                                  scope="fully1st",
+                                  scope="alex_net/fully1st",
                                   weight_decay=0.004,
                                   regularizer='L2')
         network = dropout(network, 0.5)
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
-                                  scope="fully2nd",
+                                  scope="alex_net/fully2nd",
                                   weight_decay=0.004,
                                   regularizer='L2')
         network = dropout(network, 0.5)
@@ -178,7 +175,7 @@ class ModifiedAlexNet(object):
             network = fully_connected(network,
                                       self.__num_classes,
                                       activation="linear",
-                                      scope="fully3rd",
+                                      scope="alex_net/fully3rd",
                                       weight_decay=0.0,
                                       regularizer='L2')
 
@@ -198,7 +195,7 @@ class ModifiedAlexNet(object):
 
         if not self.__total_loss:
             # Get regularization losses that will be added to the actual loss
-            reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, self.__scope)
+            reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, 'alex_net/')
             # Calculate total loss
             self.__total_loss = tf.add(self.__loss,
                                        tf.add_n(reg_losses, 'reg_losses'),

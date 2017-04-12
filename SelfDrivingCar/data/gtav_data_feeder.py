@@ -113,7 +113,7 @@ class GTAVDataFeeder(object):
         ## Read IMAGE DATA:
         img = Image.open(imgPath)
         img.load()
-        imgData = np.asarray(img, dtype="int32")
+        imgData = np.asarray(img, dtype=np.uint8)
         # print imgPath
         # Update the frame and data buffers
         # if self.bufSize==self.episodeSize:

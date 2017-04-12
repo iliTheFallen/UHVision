@@ -39,7 +39,7 @@ def huber_m_loss(labels_tensor,
                  name='loss'):
     '''
      Calculates the Huber-M loss function for the given 
-     parameters. Note that this is for regression purposes; but not 
+     parameters. Note that this is for regression purposes; not 
      for classification.
     :param labels_tensor: Correct predictions. NxF matrix where 
      N is number of targets and F is number of features
@@ -76,7 +76,7 @@ def huber_m_loss(labels_tensor,
         loss.append(tf.realdiv(tf.add(lad_res, lsd_res),
                                tf.constant(N, dtype=tf.float32)))
 
-    # Step-3) Finally merge all these losses into a single loss vector
+    # Step-3) Finally merge all these losses for different features into a single loss vector
     loss = tf.stack(loss, 0, name=name)
 
     return loss

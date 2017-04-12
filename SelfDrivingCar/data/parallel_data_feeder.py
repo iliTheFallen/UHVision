@@ -51,14 +51,15 @@ class ParallelDataFeeder(object):
         self.__num_threads = num_threads
         self.__fields = fields
         self.__image_size = image_size
+        self.__fields = list(fields)  # Avoid exhaustion
 
         self.__features = {}
-        for (name, t) in fields:
+        for (name, t) in self.__fields:
             self.__features[name] = tf.FixedLenFeature([], t)
         # Its name is a bit ambiguous; but it has all records in it.
         # QueueRunner will read records (pair of image & label) until this file
         # is exhausted. And it queues the same file for 'num_epochs' times
-        self.__file_name_queue = tf.train.string_input_producer(tf_record_file_name,
+        self.__file_name_queue = tf.train.string_input_producer([tf_record_file_name],
                                                                 num_epochs=num_epochs)
 
     def _read_and_decode(self):
@@ -67,9 +68,14 @@ class ParallelDataFeeder(object):
         _, serialized_ex = reader.read(self.__file_name_queue)
         features = tf.parse_single_example(serialized_ex,
                                            features=self.__features)
+        # TODO: Should we parametrize its data type? Not sure...
         image = tf.decode_raw(features[consts.IMAGE_RAW], tf.uint8)
-        image.set_shape(self.__image_size)
-
+        # TODO: Write a comment for why set_shape does not work
+        image = tf.reshape(image, self.__image_size)
+        # Convolutional layers do not accept data type of uint8
+        image = tf.subtract(tf.multiply(tf.cast(image, tf.float32),
+                                        tf.constant(1.0/255.0)),
+                            tf.constant(0.5))
         labels = []
         for (name, t) in self.__fields:
             if name != consts.IMAGE_RAW:

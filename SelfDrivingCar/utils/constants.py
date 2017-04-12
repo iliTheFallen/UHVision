@@ -32,7 +32,8 @@ THROTTLE = 'throttle'
 BRAKE = 'brake'
 IMAGE_RAW = 'image_raw'
 
-TOWER_NAME = 'tower_%d'
+
+TOWER_NAME = 'tower_'
 GLOBAL_STEP = 'global_step'
-GPU_NAME = '/gpu:%d'
-CPU_NAME = '/cpu:%d'
+GPU_NAME = '/gpu:'
+CPU_NAME = '/cpu:'

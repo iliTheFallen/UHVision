@@ -50,7 +50,7 @@ class ConvertToTFRecord(object):
         self.__reader = reader
         self.__out_folder = out_folder
         self.__out_file = out_file
-        self.__fields = fields
+        self.__fields = list(fields)  # Avoid exhaustion
 
     @staticmethod
     def _int64_feature(value):

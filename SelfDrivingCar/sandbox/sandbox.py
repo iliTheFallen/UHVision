@@ -29,8 +29,11 @@
 
 import tensorflow as tf
 
+from PIL import Image
+
 from data.convert_to_tf_record import ConvertToTFRecord
 from data.gtav_data_feeder import GTAVDataFeeder
+from data.parallel_data_feeder import ParallelDataFeeder
 from utils import loss_funcs as loss
 from utils import constants as consts
 
@@ -50,10 +53,11 @@ def test_huber_m_cost():
     loss_tensor = loss.huber_m_loss(labels, targets, 0.5)
 
     init = tf.global_variables_initializer()
-    with tf.Session() as sess, tf.device("/gpu:0"):
-        sess.run(init)
-        res = sess.run(loss_tensor)
-        print('Loss function for 2 features: \n', res)
+    with tf.Graph().as_default(), tf.device("/gpu:0"):
+        with tf.Session() as sess:
+            sess.run(init)
+            res = sess.run(loss_tensor)
+            print('Loss function for 2 features: \n', res)
 
 
 def convert_to_tf_record():
@@ -78,6 +82,60 @@ def convert_to_tf_record():
                                   zip(names, types))
     converter.convert(1024)
 
+
+def test_parallel_data_feeder():
+
+    def _prepare_fields():
+        types = [  # Order matters
+            tf.string,
+            tf.float32,
+            tf.float32,
+            tf.float32
+        ]
+        names = [  # Order matters
+            consts.IMAGE_RAW,
+            consts.STEERING_ANGLE,
+            consts.THROTTLE,
+            consts.BRAKE
+        ]
+        return zip(names, types)
+    data_feeder = ParallelDataFeeder('/home/cougarnet.uh.edu/igurcan/Documents'
+                                     '/phdStudies/UHVision/SelfDrivingCar/DriveXbox1'
+                                     '/gtav_training.tfrecords',
+                                     2,
+                                     1,
+                                     _prepare_fields(),
+                                     [600, 800, 3])
+    images, labels = data_feeder.inputs(16, 1024, 0.4, True)
+    init = tf.group(tf.global_variables_initializer(),
+                    tf.local_variables_initializer())
+    with tf.device("/gpu:0"):
+        with tf.Session() as sess:
+            sess.run(init)
+            # Start input enqueue threads for reading input data using 'parallel data feeder' mechanism
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+            step = 0
+            try:
+                while not coord.should_stop():
+                    im_out, la_out = sess.run([images, labels])
+                    num_im = im_out.shape[0]
+                    for i in range(num_im):
+                        image = Image.fromarray(im_out[i, :, :, :], 'RGB')
+                        image.show()
+                    step += 1
+            except tf.errors.OutOfRangeError:
+                print('Done reading for %d steps.' % (step))
+            except KeyboardInterrupt:
+                print('Done reading for %d steps.' % (step))
+            finally:
+                # When done, ask all threads to stop
+                coord.request_stop()
+            # Wait for threads to finish
+            coord.join(threads)
+
+
 if __name__ == "__main__":
     # test_huber_m_cost()
-    convert_to_tf_record()
+    # convert_to_tf_record()
+    test_parallel_data_feeder()
