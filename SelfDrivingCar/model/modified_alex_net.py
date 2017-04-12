@@ -28,7 +28,7 @@
 '''
 
 import tensorflow as tf
-from tflearn.layers.core import input_data, dropout, fully_connected
+from tflearn.layers.core import dropout, fully_connected
 from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
@@ -39,21 +39,19 @@ from utils import loss_funcs as loss_func
 class ModifiedAlexNet(object):
 
     # Parameters
-    __batch_size = None
-    __num_channels = None
-    __frame_size = None
-    __input_ph = None
-    __target_ph = None
-    # -Steering Angle, -Velocity, -Throttle, -Brake
-    __num_classes = None
+    __num_classes = None  # -Steering Angle, -Velocity, -Throttle, -Brake
     __learning_rate = None
     __momentum = None
     __percentile = None
 
+    # Fields used by the class internally
+    __layer_names = None
+    __input_ph = None
+    __target_ph = None
+
+    # Class properties
     __input_shape = None
     __output_shape = None
-
-    # Network state
     __network = None  # Graph for AlexNet
     __train_op = None  # Operation used to optimize loss function
     __loss = None  # Loss function to be optimized, which is based on predictions
@@ -62,7 +60,7 @@ class ModifiedAlexNet(object):
     def __init__(self,
                  images=None,
                  labels=None,
-                 batch_size=1,
+                 batch_size=2,
                  num_channels=3,
                  frame_size=(800, 600),
                  num_classes=3,
@@ -70,19 +68,26 @@ class ModifiedAlexNet(object):
                  learning_rate=0.001,
                  momentum=0.9):
 
-        self.__batch_size = batch_size
-        self.__num_channels = num_channels
-        self.__frame_size = frame_size
         self.__num_classes = num_classes
         self.__learning_rate = learning_rate
         self.__momentum = momentum
         self.__percentile = percentile
 
-        self.__input_shape = [self.__batch_size,
-                              self.__frame_size[0],
-                              self.__frame_size[1],
-                              self.__num_channels]
-        self.__output_shape = [self.__batch_size, self.__num_classes]
+        self.__layer_names = [
+            'conv1st',
+            'conv2nd',
+            'conv3rd',
+            'conv4th',
+            'conv5th',
+            'fully1st',
+            'fully2nd',
+            'fully3rd'
+        ]
+        self.__input_shape = [batch_size,
+                              frame_size[0],
+                              frame_size[1],
+                              num_channels]
+        self.__output_shape = [batch_size, self.__num_classes]
         # Tensors are objects. Use 'is not' when you check whether it is empty or not
         if images is not None and labels is not None:
             self.__input_ph = images
@@ -118,12 +123,13 @@ class ModifiedAlexNet(object):
         # None for the 1st dimension
         # input_shape.insert(0, None)
         # Building network...
-        network = input_data(shape=self.__input_shape,
-                             placeholder=self.__input_ph)
-        network = conv_2d(network,
+
+        # Don't use input layer for it adds extra
+        # operations which cause trouble for checkpoint saver.
+        network = conv_2d(self.__input_ph,
                           96, 11, strides=4,
                           activation="relu",
-                          scope="alex_net/conv1st",
+                          scope=self.__layer_names[0],
                           weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
@@ -131,7 +137,7 @@ class ModifiedAlexNet(object):
         network = conv_2d(network,
                           256, 5,
                           activation="relu",
-                          scope="alex_net/conv2nd",
+                          scope=self.__layer_names[1],
                           weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
@@ -139,19 +145,19 @@ class ModifiedAlexNet(object):
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
-                          scope="alex_net/conv3rd",
+                          scope=self.__layer_names[2],
                           weight_decay=0.0,
                           regularizer='L2')
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
-                          scope="alex_net/conv4th",
+                          scope=self.__layer_names[3],
                           weight_decay=0.0,
                           regularizer='L2')
         network = conv_2d(network,
                           256, 3,
                           activation="relu",
-                          scope="alex_net/conv5th",
+                          scope=self.__layer_names[4],
                           weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
@@ -159,14 +165,14 @@ class ModifiedAlexNet(object):
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
-                                  scope="alex_net/fully1st",
+                                  scope=self.__layer_names[5],
                                   weight_decay=0.004,
                                   regularizer='L2')
         network = dropout(network, 0.5)
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
-                                  scope="alex_net/fully2nd",
+                                  scope=self.__layer_names[6],
                                   weight_decay=0.004,
                                   regularizer='L2')
         network = dropout(network, 0.5)
@@ -175,14 +181,14 @@ class ModifiedAlexNet(object):
             network = fully_connected(network,
                                       self.__num_classes,
                                       activation="linear",
-                                      scope="alex_net/fully3rd",
+                                      scope=self.__layer_names[7],
                                       weight_decay=0.0,
                                       regularizer='L2')
 
         self.__network = network
         return self
 
-    def loss(self):
+    def loss_func(self):
 
         if not self.__loss:
             self.__loss = loss_func.huber_m_loss(self.__target_ph,
@@ -191,15 +197,22 @@ class ModifiedAlexNet(object):
                                                  name='actual_loss')
         return self
 
-    def total_loss(self):
+    def total_loss_func(self):
 
         if not self.__total_loss:
             # Get regularization losses that will be added to the actual loss
-            reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, 'alex_net/')
+            reg_losses = []
+            for name in self.__layer_names:
+                rl = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, name)
+                if rl:
+                    reg_losses.append(rl)
             # Calculate total loss
-            self.__total_loss = tf.add(self.__loss,
-                                       tf.add_n(reg_losses, 'reg_losses'),
-                                       name='total_loss')
+            if len(reg_losses) > 0:
+                self.__total_loss = tf.add(self.__loss,
+                                           tf.add_n(reg_losses, 'reg_losses'),
+                                           name='total_loss')
+            else:
+                self.__total_loss = self.__loss
         return self
 
     def train(self):
@@ -211,7 +224,26 @@ class ModifiedAlexNet(object):
             self.__train_op = momentum.get_tensor()
         return self
 
-    def get_all(self):
+    @property
+    def input_shape(self):
+        return self.__input_shape
 
-        return self.__loss, self.__total_loss, self.__train_op
+    @property
+    def output_shape(self):
+        return self.__output_shape
 
+    @property
+    def network(self):
+        return self.__network
+
+    @property
+    def train_op(self):
+        return self.__train_op
+
+    @property
+    def loss(self):
+        return self.__loss
+
+    @property
+    def total_loss(self):
+        return self.__total_loss

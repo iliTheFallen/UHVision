@@ -35,7 +35,7 @@ from tflearn.optimizers import Momentum
 import re
 import time
 import os
-from datetime import datetime
+# from datetime import datetime
 
 from utils import constants as consts
 from model.modified_alex_net import ModifiedAlexNet
@@ -44,30 +44,30 @@ from data.parallel_data_feeder import ParallelDataFeeder
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_string("train_dir", './alexnet_train',
                            """"Directory in where logs and checkpoints are stored""")
-tf.app.flags.DEFINE_integer("num_gpus", 1,
+tf.app.flags.DEFINE_integer("num_gpus", 4,
                             """"Number of GPUs to be used for training""")
-tf.app.flags.DEFINE_boolean("log_device_placement", True,
+tf.app.flags.DEFINE_boolean("log_device_placement", False,
                             """"Whether to log device placement""")
-tf.app.flags.DEFINE_integer("num_epochs", 100,
+tf.app.flags.DEFINE_integer("num_epochs", 1000,
                             """"How many times the whole training set has to be fed into network""")
 tf.app.flags.DEFINE_integer("num_ex_per_epoch", 1024,
                             """"Number of samples in an epoch""")
 tf.app.flags.DEFINE_integer("num_threads", 2,
                             """"Number of threads that will enqueue training samples from the sample queue""")
 tf.app.flags.DEFINE_string("tf_record_file_name",
-                           '/home/cougarnet.uh.edu/igurcan/Documents' 
-                           '/phdStudies/UHVision/SelfDrivingCar/DriveXbox1'
+                           '/home/ilithefallen/Documents/phdThesis'
+                           '/UHVision/SelfDrivingCar/DriveXbox1'
                            '/gtav_training.tfrecords',
                            """"Native TF file where training samples are stored""")
 tf.app.flags.DEFINE_float("moving_average_decay", 0.9999,
                           """"Decay rate for the past records in exponential moving average""")
-tf.app.flags.DEFINE_integer("batch_size", 2,
+tf.app.flags.DEFINE_integer("batch_size", 16,
                             """Number of samples in a batch""")
 tf.app.flags.DEFINE_float("min_frac_ex_in_queue", 0.4,
                           """"Fraction of samples in a given epoch to be kept in queue for a nice shuffling""")
 
-IM_W = 800
-IM_H = 600
+IM_W = 400
+IM_H = 300
 IM_D = 3
 
 
@@ -86,21 +86,23 @@ def tower_ops(data_feeder):
                                         True)
     # Build the network and its loss functions
     # Each op name of any loss function starts with 'tower_i/*'
-    alex_net = ModifiedAlexNet(batch_size=FLAGS.batch_size,
+    alex_net = ModifiedAlexNet(images=images,
+                               labels=labels,
+                               batch_size=FLAGS.batch_size,
                                frame_size=(IM_H, IM_W),
                                num_channels=IM_D)
-    alex_net.inference(False).loss().total_loss()
+    alex_net.inference(False).loss_func().total_loss_func()
     # Get the actual and total losses
-    act_loss, total_loss, _ = alex_net.get_all()
+    losses = [alex_net.loss, alex_net.total_loss]
 
     # Add summary operations for each dimension of loss functions
-    for l in [act_loss, total_loss]:
+    for l in losses:
         loss_name = re.sub('%s[0-9]*/' % consts.TOWER_NAME, '', l.op.name)
         tf.summary.scalar(loss_name+'_'+consts.STEERING_ANGLE, l[0])  # STEERING
         tf.summary.scalar(loss_name + '_' + consts.THROTTLE, l[1])  # THROTTLE
         tf.summary.scalar(loss_name + '_' + consts.BRAKE, l[2])  # BRAKE
 
-    return total_loss
+    return alex_net.total_loss
 
 
 def average_gradients(tower_grads):
@@ -109,8 +111,8 @@ def average_gradients(tower_grads):
     :param tower_grads: 
     :return: 
     '''
-    if FLAGS.num_gpus < 2:
-        return tower_grads[0]
+    # if FLAGS.num_gpus < 2:
+    #     return tower_grads[0]
     average_grads = []
     for grad_and_vars in zip(*tower_grads):
         # Note that each grad_and_vars looks like the following:
@@ -153,19 +155,18 @@ def prepare_fields():
 def train():
 
     with tf.Graph().as_default(), tf.device(consts.CPU_NAME+'%d' % 0):
+        init_training_mode()  # Necessary if you don't use Trainer from tflearn
         # Initializations
         data_feeder = ParallelDataFeeder(FLAGS.tf_record_file_name,
                                          FLAGS.num_threads,
                                          FLAGS.num_epochs,
                                          prepare_fields(),
                                          [IM_H, IM_W, IM_D])
-        init_training_mode()  # Necessary if you don't use Trainer from tflearn
         global_step = tf.get_variable(consts.GLOBAL_STEP,
                                       [],
                                       initializer=tf.constant_initializer(0),
                                       trainable=False)
         tower_grads = []
-        losses = []
         # A global optimizer is necessary for we compute gradients across several GPUs.
         # Although its compute_gradients is called on every GPU; reduction of these gradients
         # and applying them to update parameters are run on CPU
@@ -176,8 +177,8 @@ def train():
             for i in range(FLAGS.num_gpus):
                 with tf.device(consts.GPU_NAME+'%d' % i):
                     with tf.name_scope(consts.TOWER_NAME+'%d' % i) as scope:
+                        print('Building network replica for GPU:%d...' % i)
                         total_loss = tower_ops(data_feeder)
-                        losses.append(total_loss)
                         # Share all parameters across all GPUs
                         var_scope.reuse_variables()
                         # Retain summaries from only the final tower
@@ -213,27 +214,36 @@ def train():
         config.allow_soft_placement = True
         config.log_device_placement = FLAGS.log_device_placement
         with tf.Session(config=config) as sess:
+            print('Initializing global & local variables...')
             sess.run(init)
             # Start input enqueue threads for reading input data using 'parallel data feeder' mechanism
+            print('QueueRunner for parallel data feeding is starting...')
             coord = tf.train.Coordinator()
             threads = tf.train.start_queue_runners(sess=sess, coord=coord)
             summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
             step = 1
             try:
+                print('Training...')
                 while not coord.should_stop():
                     start_time = time.time()
-                    _, loss_values = sess.run([train_op]+losses)
+                    _, loss_values = sess.run([train_op, total_loss])
                     duration = time.time()-start_time
                     if step % 10 == 0:
-                        num_ex_per_step = FLAGS.batch_size*FLAGS.num_gpus
-                        ex_per_sec = num_ex_per_step / duration
-                        sec_per_batch = duration / FLAGS.num_gpus
-                        format_str = ('%s: step %d (%.1f examples/sec; %.3f '
-                                      'sec/batch)')
-                        print(format_str % (datetime.now(),
-                                            step,
-                                            ex_per_sec,
-                                            sec_per_batch))
+                        # num_ex_per_step = FLAGS.batch_size*FLAGS.num_gpus
+                        # ex_per_sec = num_ex_per_step / duration
+                        # sec_per_batch = duration / FLAGS.num_gpus
+                        # format_str = ('%s: step %d (%.1f examples/sec; %.3f '
+                        #               'sec/batch)')
+                        # print(format_str % (datetime.now(),
+                        #                     step,
+                        #                     ex_per_sec,
+                        #                     sec_per_batch))
+                        loss_format_str = ('%s_loss: %.5f / '
+                                           '%s_loss: %.5f / '
+                                           '%s_loss: %.5f')
+                        print(loss_format_str % (consts.STEERING_ANGLE, loss_values[0],
+                                                 consts.THROTTLE, loss_values[1],
+                                                 consts.BRAKE, loss_values[2]))
                     if step % 100 == 0:
                         summary_str = sess.run(summary_op)
                         summary_writer.add_summary(summary_str, step)

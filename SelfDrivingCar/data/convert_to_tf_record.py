@@ -30,6 +30,8 @@
 import tensorflow as tf
 
 import os
+from scipy.misc import imresize
+
 
 from utils import constants as consts
 
@@ -46,6 +48,9 @@ class ConvertToTFRecord(object):
                  out_folder,
                  out_file,
                  fields):
+
+        if not hasattr(reader, '__iter__') or not hasattr(reader, 'reset'):
+            raise ValueError('Invalid Reader!')
 
         self.__reader = reader
         self.__out_folder = out_folder
@@ -64,25 +69,36 @@ class ConvertToTFRecord(object):
     def _float_feature(value):
         return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
 
-    def _prepare_features_map(self, frame_buf, label_buf):
+    def _prepare_features_map(self, frame, label):
 
         features = {}
         i = 0
         for (key, value) in self.__fields:
             if value == tf.uint8:
-                features[key] = ConvertToTFRecord._bytes_feature(label_buf[i])
+                features[key] = ConvertToTFRecord._bytes_feature(label[i])
             elif value == tf.int64:
-                features[key] = ConvertToTFRecord._int64_feature(label_buf[i])
+                features[key] = ConvertToTFRecord._int64_feature(label[i])
             else:
-                features[key] = ConvertToTFRecord._float_feature(label_buf[i])
+                features[key] = ConvertToTFRecord._float_feature(label[i])
             i += 1
         # Finally append our raw image data to our feature map
-        features[consts.IMAGE_RAW] = ConvertToTFRecord._bytes_feature(frame_buf.tostring())
+        features[consts.IMAGE_RAW] = ConvertToTFRecord._bytes_feature(frame.tostring())
         return features
 
-    def convert(self, max_num_records):
+    def convert(self,
+                max_num_records,
+                im_size=(300, 400)):
+        ''' Convert
+        
+        Converts samples provided by reader to native tensorflow format
+        
+        :param max_num_records:
+        :param im_size:
+        :return: None
+        '''
 
-        file_name = os.path.join(self.__out_folder, self.__out_file+'.tfrecords')
+        file_name = os.path.join(self.__out_folder,
+                                 self.__out_file+'.tfrecords')
         # Remove if it exists
         if tf.gfile.Exists(file_name):
             tf.gfile.Remove(file_name)
@@ -91,8 +107,12 @@ class ConvertToTFRecord(object):
         print('Writing records into %s' % file_name)
         writer = tf.python_io.TFRecordWriter(file_name)
         num_tuples = 0
-        for (frame_buf, label_buf) in self.__reader:
-            features = self._prepare_features_map(frame_buf, label_buf.tolist())
+        for (frame, label) in self.__reader:
+            if im_size != frame.shape[0:2]:
+                new_frame = imresize(frame, size=im_size, interp='bicubic')
+            else:
+                new_frame = frame
+            features = self._prepare_features_map(new_frame, label.tolist())
             example = tf.train.Example(features=tf.train.Features(feature=features))
             writer.write(example.SerializeToString())
             num_tuples += 1

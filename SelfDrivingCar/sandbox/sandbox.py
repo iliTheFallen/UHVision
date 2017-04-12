@@ -63,8 +63,8 @@ def test_huber_m_cost():
 def convert_to_tf_record():
 
     reader = GTAVDataFeeder(drive_folder=
-                            '/home/cougarnet.uh.edu/igurcan/Documents'
-                            '/phdStudies/UHVision/SelfDrivingCar/DriveXbox1')
+                            '/home/ilithefallen/Documents/phdThesis'
+                            '/UHVision/SelfDrivingCar/DriveXbox1')
     types = [  # Order matters
         tf.float32,
         tf.float32,
@@ -76,11 +76,11 @@ def convert_to_tf_record():
         consts.BRAKE
     ]
     converter = ConvertToTFRecord(reader,
-                                  '/home/cougarnet.uh.edu/igurcan/Documents'
-                                  '/phdStudies/UHVision/SelfDrivingCar/DriveXbox1',
+                                  '/home/ilithefallen/Documents/phdThesis'
+                                  '/UHVision/SelfDrivingCar/DriveXbox1',
                                   'gtav_training',
                                   zip(names, types))
-    converter.convert(1024)
+    converter.convert(1024, im_size=(300, 400))
 
 
 def test_parallel_data_feeder():
@@ -99,13 +99,13 @@ def test_parallel_data_feeder():
             consts.BRAKE
         ]
         return zip(names, types)
-    data_feeder = ParallelDataFeeder('/home/cougarnet.uh.edu/igurcan/Documents'
-                                     '/phdStudies/UHVision/SelfDrivingCar/DriveXbox1'
+    data_feeder = ParallelDataFeeder('/home/ilithefallen/Documents/phdThesis'
+                                     '/UHVision/SelfDrivingCar/DriveXbox1'
                                      '/gtav_training.tfrecords',
                                      2,
                                      1,
                                      _prepare_fields(),
-                                     [600, 800, 3])
+                                     [300, 400, 3])
     images, labels = data_feeder.inputs(16, 1024, 0.4, True)
     init = tf.group(tf.global_variables_initializer(),
                     tf.local_variables_initializer())
@@ -137,5 +137,5 @@ def test_parallel_data_feeder():
 
 if __name__ == "__main__":
     # test_huber_m_cost()
-    # convert_to_tf_record()
-    test_parallel_data_feeder()
+    convert_to_tf_record()
+    # test_parallel_data_feeder()

@@ -34,10 +34,12 @@ from utils import constants as consts
 
 class ParallelDataFeeder(object):
 
+    # Parameters
     __num_threads = None
     __fields = None
     __image_size = None
 
+    # Fields used by the class internally
     __file_name_queue = None
     __features = None
 
