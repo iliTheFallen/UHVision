@@ -37,8 +37,8 @@ class MANNNetwork(NNModel):
     __new_target_ph = None
 
     def __init__(self,
-                 input_ph,
-                 target_ph,
+                 input_ph=None,
+                 target_ph=None,
                  batch_size=1,
                  input_size=800*600,
                  num_classes=3,

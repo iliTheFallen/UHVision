@@ -32,8 +32,8 @@ import tensorflow as tf
 from PIL import Image
 
 from data.convert_to_tf_record import ConvertToTFRecord
-from data.gtav_data_feeder import GTAVDataFeeder
-from data.parallel_data_feeder import ParallelDataFeeder
+from data.gtav_data_reader import GTAVDataFeeder
+from data.tf_record_feeder import TFRecordFeeder
 from utils import loss_funcs as loss
 from utils import constants as consts
 
@@ -99,13 +99,13 @@ def test_parallel_data_feeder():
             consts.BRAKE
         ]
         return zip(names, types)
-    data_feeder = ParallelDataFeeder('/home/ilithefallen/Documents/phdThesis'
-                                     '/UHVision/SelfDrivingCar/DriveXbox1'
-                                     '/gtav_training.tfrecords',
-                                     2,
-                                     1,
-                                     _prepare_fields(),
-                                     [300, 400, 3])
+    data_feeder = TFRecordFeeder('/home/ilithefallen/Documents/phdThesis'
+                                 '/UHVision/SelfDrivingCar/DriveXbox1'
+                                 '/gtav_training.tfrecords',
+                                 2,
+                                 1,
+                                 _prepare_fields(),
+                                 [300, 400, 3])
     images, labels = data_feeder.inputs(16, 1024, 0.4, True)
     init = tf.group(tf.global_variables_initializer(),
                     tf.local_variables_initializer())
@@ -135,7 +135,18 @@ def test_parallel_data_feeder():
             coord.join(threads)
 
 
+def func1(name, soft_id):
+
+    print('Name %s / SoftId: %d' % (name, soft_id))
+
+
+def pack_unpack(**kwargs):
+
+    print('Calling the function func1')
+    func1(**kwargs)
+
 if __name__ == "__main__":
     # test_huber_m_cost()
-    convert_to_tf_record()
+    # convert_to_tf_record()
     # test_parallel_data_feeder()
+    pack_unpack(name='Ilker GURCAN', soft_id=1456789)

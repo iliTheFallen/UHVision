@@ -29,29 +29,37 @@
 
 
 import tensorflow as tf
-from tflearn.config import init_training_mode
 from tflearn.optimizers import Momentum
 
-import re
-import time
 import os
-# from datetime import datetime
+import re
 
-from utils import constants as consts
 from model.modified_alex_net import ModifiedAlexNet
-from data.parallel_data_feeder import ParallelDataFeeder
+from utils.parallel_net_runner import ConfigOptions
+from utils.parallel_net_runner import ParallelNetRunner
+from utils import constants as consts
+from data.tf_record_feeder import TFRecordFeeder
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string("train_dir", './alexnet_train',
+
+# Configuration options for parallel network runner
+tf.app.flags.DEFINE_string(ConfigOptions.TRAIN_DIR.value, './alexnet_train',
                            """"Directory in where logs and checkpoints are stored""")
-tf.app.flags.DEFINE_integer("num_gpus", 4,
+tf.app.flags.DEFINE_integer(ConfigOptions.NUM_GPUS.value, 4,
                             """"Number of GPUs to be used for training""")
-tf.app.flags.DEFINE_boolean("log_device_placement", False,
-                            """"Whether to log device placement""")
+tf.app.flags.DEFINE_integer(ConfigOptions.NUM_EX_PER_EPOCH.value, 1024,
+                            """"Number of samples in an epoch""")
+tf.app.flags.DEFINE_float(ConfigOptions.MOVING_AVERAGE_DECAY.value, 0.9999,
+                          """"Decay rate for the past records in exponential moving average""")
+tf.app.flags.DEFINE_integer(ConfigOptions.BATCH_SIZE.value, 16,
+                            """Number of samples in a batch""")
+tf.app.flags.DEFINE_float(ConfigOptions.MIN_FRAC_EX_IN_QUEUE.value, 0.4,
+                          """"Fraction of samples in a given epoch to be kept in queue for a nice shuffling""")
+tf.app.flags.DEFINE_boolean(ConfigOptions.SHOULD_SHUFFLE.value, True,
+                            """"Whether to shuffle samples.""")
+# Configuration options for data feeder
 tf.app.flags.DEFINE_integer("num_epochs", 1000,
                             """"How many times the whole training set has to be fed into network""")
-tf.app.flags.DEFINE_integer("num_ex_per_epoch", 1024,
-                            """"Number of samples in an epoch""")
 tf.app.flags.DEFINE_integer("num_threads", 2,
                             """"Number of threads that will enqueue training samples from the sample queue""")
 tf.app.flags.DEFINE_string("tf_record_file_name",
@@ -59,80 +67,13 @@ tf.app.flags.DEFINE_string("tf_record_file_name",
                            '/UHVision/SelfDrivingCar/DriveXbox1'
                            '/gtav_training.tfrecords',
                            """"Native TF file where training samples are stored""")
-tf.app.flags.DEFINE_float("moving_average_decay", 0.9999,
-                          """"Decay rate for the past records in exponential moving average""")
-tf.app.flags.DEFINE_integer("batch_size", 16,
-                            """Number of samples in a batch""")
-tf.app.flags.DEFINE_float("min_frac_ex_in_queue", 0.4,
-                          """"Fraction of samples in a given epoch to be kept in queue for a nice shuffling""")
+# Configuration options for the session
+tf.app.flags.DEFINE_boolean("log_device_placement", False,
+                            """"Whether to log device placement""")
 
 IM_W = 400
 IM_H = 300
 IM_D = 3
-
-
-def tower_ops(data_feeder):
-    '''
-    Called per GPU. Creates a replica of AlexNet on the
-     specified GPU.
-    :param data_feeder: 
-    :return: 
-    '''
-
-    # Fetch a batch of images and labels from sample source
-    images, labels = data_feeder.inputs(FLAGS.batch_size,
-                                        FLAGS.num_ex_per_epoch,
-                                        FLAGS.min_frac_ex_in_queue,
-                                        True)
-    # Build the network and its loss functions
-    # Each op name of any loss function starts with 'tower_i/*'
-    alex_net = ModifiedAlexNet(images=images,
-                               labels=labels,
-                               batch_size=FLAGS.batch_size,
-                               frame_size=(IM_H, IM_W),
-                               num_channels=IM_D)
-    alex_net.inference(False).loss_func().total_loss_func()
-    # Get the actual and total losses
-    losses = [alex_net.loss, alex_net.total_loss]
-
-    # Add summary operations for each dimension of loss functions
-    for l in losses:
-        loss_name = re.sub('%s[0-9]*/' % consts.TOWER_NAME, '', l.op.name)
-        tf.summary.scalar(loss_name+'_'+consts.STEERING_ANGLE, l[0])  # STEERING
-        tf.summary.scalar(loss_name + '_' + consts.THROTTLE, l[1])  # THROTTLE
-        tf.summary.scalar(loss_name + '_' + consts.BRAKE, l[2])  # BRAKE
-
-    return alex_net.total_loss
-
-
-def average_gradients(tower_grads):
-    '''
-    
-    :param tower_grads: 
-    :return: 
-    '''
-    # if FLAGS.num_gpus < 2:
-    #     return tower_grads[0]
-    average_grads = []
-    for grad_and_vars in zip(*tower_grads):
-        # Note that each grad_and_vars looks like the following:
-        # ((grad0_gpu0, var0_gpu0), ..., (grad0_gpuN, var0_gpuN))
-        grads = []
-        for g, _ in grad_and_vars:
-            # Add a leading dimension to the gradients to represent the tower
-            expanded_grad = tf.expand_dims(g, 0)
-            # Append on a 'GPU (tower)' dimension which will average over
-            grads.append(expanded_grad)
-        # Average over the 'tower' dimension
-        grad = tf.concat(grads, axis=0)
-        grad = tf.reduce_mean(grad, 0)
-        # Keep in mind that the Variables are redundant because they are shared
-        # across towers. So .. we will just return the first tower's pointer to
-        # the Variable.
-        var = grad_and_vars[0][1]
-        grad_and_var = (grad, var)
-        average_grads.append(grad_and_var)
-    return average_grads
 
 
 def prepare_fields():
@@ -152,113 +93,91 @@ def prepare_fields():
     return zip(names, types)
 
 
+def _step(runner, summary_writer, summary_op):
+
+    _, loss_values, step = runner.sess.run([runner.train_op,
+                                            runner.loss,
+                                            runner.global_step])
+    if step % 10 == 0:
+        loss_format_str = ('%s_loss: %.5f / '
+                           '%s_loss: %.5f / '
+                           '%s_loss: %.5f')
+        print(loss_format_str % (consts.STEERING_ANGLE, loss_values[0],
+                                 consts.THROTTLE, loss_values[1],
+                                 consts.BRAKE, loss_values[2]))
+    if step % 100 == 0:
+        summary_str = runner.sess.run(summary_op)
+        summary_writer.add_summary(summary_str, step)
+        # Save a checkpoint at the end of every epoch
+    if step % FLAGS.num_ex_per_epoch == 0:
+        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
+        runner.saver.save(runner.sess,
+                          checkpoint_path,
+                          global_step=step)
+
+
+def attach_summary_writers(runner):
+
+    gpu_loss = runner.loss
+    loss_name = re.sub('%s[0-9]*/' % consts.TOWER_NAME, '', gpu_loss.op.name)
+    tf.summary.scalar(loss_name+'_'+consts.STEERING_ANGLE, gpu_loss[0])  # STEERING
+    tf.summary.scalar(loss_name + '_' + consts.THROTTLE, gpu_loss[1])  # THROTTLE
+    tf.summary.scalar(loss_name + '_' + consts.BRAKE, gpu_loss[2])  # BRAKE
+    return tf.summary.merge_all()
+
+
 def train():
 
-    with tf.Graph().as_default(), tf.device(consts.CPU_NAME+'%d' % 0):
-        init_training_mode()  # Necessary if you don't use Trainer from tflearn
-        # Initializations
-        data_feeder = ParallelDataFeeder(FLAGS.tf_record_file_name,
-                                         FLAGS.num_threads,
-                                         FLAGS.num_epochs,
-                                         prepare_fields(),
-                                         [IM_H, IM_W, IM_D])
-        global_step = tf.get_variable(consts.GLOBAL_STEP,
-                                      [],
-                                      initializer=tf.constant_initializer(0),
-                                      trainable=False)
-        tower_grads = []
-        # A global optimizer is necessary for we compute gradients across several GPUs.
-        # Although its compute_gradients is called on every GPU; reduction of these gradients
-        # and applying them to update parameters are run on CPU
-        opt = Momentum(learning_rate=0.001, momentum=0.9)
-        opt = opt.get_tensor()
-        # Building network replicas and their corresponding losses on specified # of GPUs
-        with tf.variable_scope(tf.get_variable_scope()) as var_scope:
-            for i in range(FLAGS.num_gpus):
-                with tf.device(consts.GPU_NAME+'%d' % i):
-                    with tf.name_scope(consts.TOWER_NAME+'%d' % i) as scope:
-                        print('Building network replica for GPU:%d...' % i)
-                        total_loss = tower_ops(data_feeder)
-                        # Share all parameters across all GPUs
-                        var_scope.reuse_variables()
-                        # Retain summaries from only the final tower
-                        summaries = tf.get_collection(tf.GraphKeys.SUMMARIES, scope)
-                        # Add operations to compute gradients on the current GPU
-                        grads = opt.compute_gradients(total_loss)
-                        # Keep track of the gradients across all GPUs
-                        tower_grads.append(grads)
-        # Synchronization point of all towers (GPUs).
-        # Calculate the mean of each gradient
-        grads = average_gradients(tower_grads)
-        # Apply gradients to adjust the shared variables (weights & biases)
-        apply_grad_op = opt.apply_gradients(grads, global_step=global_step)
-        # Track moving averages of all variables. Evaluations that use
-        # averaged parameters sometimes produce significantly better results
-        # than the final trained values.
-        ema = tf.train.ExponentialMovingAverage(FLAGS.moving_average_decay, global_step)
-        # Create the shadow variables and add ops to maintain moving averages
-        apply_ema_op = ema.apply(tf.trainable_variables())
-        # Group all updates into a single train op
-        train_op = tf.group(apply_grad_op, apply_ema_op)
-        # Create a saver for the trained model
-        saver = tf.train.Saver(tf.global_variables())
-        # Build the summary operation from the last tower summaries
-        summary_op = tf.summary.merge(summaries)
-        # Create a single variable initialization op
-        # Finish creating all variables and building all tensors
-        # before this point is reached!
-        init = tf.group(tf.global_variables_initializer(),
-                        tf.local_variables_initializer())
-        config = tf.ConfigProto()
-        config.gpu_options.allow_growth = True
-        config.allow_soft_placement = True
-        config.log_device_placement = FLAGS.log_device_placement
-        with tf.Session(config=config) as sess:
-            print('Initializing global & local variables...')
-            sess.run(init)
-            # Start input enqueue threads for reading input data using 'parallel data feeder' mechanism
-            print('QueueRunner for parallel data feeding is starting...')
-            coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-            summary_writer = tf.summary.FileWriter(FLAGS.train_dir, sess.graph)
-            step = 1
-            try:
-                print('Training...')
-                while not coord.should_stop():
-                    start_time = time.time()
-                    _, loss_values = sess.run([train_op, total_loss])
-                    duration = time.time()-start_time
-                    if step % 10 == 0:
-                        # num_ex_per_step = FLAGS.batch_size*FLAGS.num_gpus
-                        # ex_per_sec = num_ex_per_step / duration
-                        # sec_per_batch = duration / FLAGS.num_gpus
-                        # format_str = ('%s: step %d (%.1f examples/sec; %.3f '
-                        #               'sec/batch)')
-                        # print(format_str % (datetime.now(),
-                        #                     step,
-                        #                     ex_per_sec,
-                        #                     sec_per_batch))
-                        loss_format_str = ('%s_loss: %.5f / '
-                                           '%s_loss: %.5f / '
-                                           '%s_loss: %.5f')
-                        print(loss_format_str % (consts.STEERING_ANGLE, loss_values[0],
-                                                 consts.THROTTLE, loss_values[1],
-                                                 consts.BRAKE, loss_values[2]))
-                    if step % 100 == 0:
-                        summary_str = sess.run(summary_op)
-                        summary_writer.add_summary(summary_str, step)
-                    # Save a checkpoint at the end of every epoch
-                    if step % FLAGS.num_ex_per_epoch == 0:
-                        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
-                        saver.save(sess, checkpoint_path, global_step=step)
-                    step += 1
-            except tf.errors.OutOfRangeError:
-                print('Done training for %d epochs %d steps.' % (FLAGS.num_epochs, step))
-            finally:
-                # When done, ask all threads to stop
-                coord.request_stop()
-            # Wait for threads to finish
-            coord.join(threads)
+    # Create data feeder
+    data_feeder = TFRecordFeeder(FLAGS.tf_record_file_name,
+                                 FLAGS.num_threads,
+                                 FLAGS.num_epochs,
+                                 prepare_fields(),
+                                 [IM_H, IM_W, IM_D])
+    # Specify session configuration options
+    sess_config = tf.ConfigProto()
+    sess_config.gpu_options.allow_growth = True
+    sess_config.allow_soft_placement = True
+    sess_config.log_device_placement = FLAGS.log_device_placement
+    # Network class' arguments
+    net_kwargs = {
+        'batch_size': ConfigOptions.BATCH_SIZE.get_val(),
+        'num_channels': IM_D,
+        'frame_size': [IM_W, IM_H],
+        'num_classes': 3,  # Steering Angle, Throttle, and Brake
+    }
+    # Create an optimizer
+    opt = Momentum(learning_rate=0.001, momentum=0.9)
+    opt = opt.get_tensor()
+    # Create Parallel Runner
+    # If not specified, Parallel Runner creates
+    # a graph and a session object when its 'build' method is called.
+    # Use them if you need to. You may have access to these objects
+    # through its properties list. Otherwise; specify graph and
+    # session objects using its setter functions right after you
+    # create an instance of it.
+    runner = ParallelNetRunner(
+        ModifiedAlexNet,
+        net_kwargs,
+        data_feeder,
+        opt,
+        True,
+        True
+    )
+    runner.config_proto = sess_config  # Specify custom session config options
+    # Build the network.
+    # Right after this call, graph and session objects are created
+    runner.build()
+    # Add summaries
+    summary_writer = tf.summary.FileWriter(ConfigOptions.TRAIN_DIR.get_val(),
+                                           runner.graph)
+    # Don't add summary writers until you build the network.
+    # All tensors that define graph operations are created after
+    # 'build' method is called.
+    summaries = attach_summary_writers(runner)
+    # Start execution
+    step_args = (summary_writer, summaries)  # Extra args passed to _step function
+    runner.run(_step, step_args)
 
 
 def main(argv=None):

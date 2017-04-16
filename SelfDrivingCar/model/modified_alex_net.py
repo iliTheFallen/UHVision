@@ -43,6 +43,7 @@ class ModifiedAlexNet(object):
     __learning_rate = None
     __momentum = None
     __percentile = None
+    __is_only_features = None
 
     # Fields used by the class internally
     __layer_names = None
@@ -66,12 +67,16 @@ class ModifiedAlexNet(object):
                  num_classes=3,
                  percentile=0.5,
                  learning_rate=0.001,
-                 momentum=0.9):
+                 momentum=0.9,
+                 is_only_features=False):
 
+        self.__input_ph = images
+        self.__target_ph = labels
         self.__num_classes = num_classes
         self.__learning_rate = learning_rate
         self.__momentum = momentum
         self.__percentile = percentile
+        self.__is_only_features = is_only_features
 
         self.__layer_names = [
             'conv1st',
@@ -89,10 +94,7 @@ class ModifiedAlexNet(object):
                               num_channels]
         self.__output_shape = [batch_size, self.__num_classes]
         # Tensors are objects. Use 'is not' when you check whether it is empty or not
-        if images is not None and labels is not None:
-            self.__input_ph = images
-            self.__target_ph = labels
-        else:
+        if self.__input_ph is None and self.__target_ph is None:
             self.__input_ph, self.__target_ph = self._create_placeholders()
 
     def _create_placeholders(self):
@@ -102,7 +104,6 @@ class ModifiedAlexNet(object):
         target_ph = tf.placeholder(tf.float32,
                                    self.__output_shape,
                                    name="output_ph")
-
         return input_ph, target_ph
 
     def prepare_dict(self, input_, target):
@@ -113,7 +114,7 @@ class ModifiedAlexNet(object):
         }
         return feed_dict
 
-    def inference(self, is_only_features):
+    def inference(self):
 
         if self.__network:
             return
@@ -177,7 +178,7 @@ class ModifiedAlexNet(object):
                                   regularizer='L2')
         network = dropout(network, 0.5)
 
-        if not is_only_features:
+        if not self.__is_only_features:
             network = fully_connected(network,
                                       self.__num_classes,
                                       activation="linear",
@@ -190,29 +191,24 @@ class ModifiedAlexNet(object):
 
     def loss_func(self):
 
-        if not self.__loss:
-            self.__loss = loss_func.huber_m_loss(self.__target_ph,
-                                                 self.__network,
-                                                 self.__percentile,
-                                                 name='actual_loss')
-        return self
+        if self.__loss:
+            return self
 
-    def total_loss_func(self):
-
-        if not self.__total_loss:
-            # Get regularization losses that will be added to the actual loss
-            reg_losses = []
-            for name in self.__layer_names:
-                rl = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, name)
-                if rl:
-                    reg_losses.append(rl)
-            # Calculate total loss
-            if len(reg_losses) > 0:
-                self.__total_loss = tf.add(self.__loss,
-                                           tf.add_n(reg_losses, 'reg_losses'),
-                                           name='total_loss')
-            else:
-                self.__total_loss = self.__loss
+        self.__loss = loss_func.huber_m_loss(self.__target_ph,
+                                             self.__network,
+                                             self.__percentile,
+                                             name='actual_loss')
+        # Get regularization losses that will be added to the actual loss
+        reg_losses = []
+        for name in self.__layer_names:
+            rl = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES, name)
+            if rl:
+                reg_losses.append(rl)
+        # Calculate total loss
+        if len(reg_losses) > 0:
+            self.__loss = tf.add(self.__loss,
+                                 tf.add_n(reg_losses, 'reg_losses'),
+                                 name='total_loss')
         return self
 
     def train(self):
@@ -243,7 +239,3 @@ class ModifiedAlexNet(object):
     @property
     def loss(self):
         return self.__loss
-
-    @property
-    def total_loss(self):
-        return self.__total_loss

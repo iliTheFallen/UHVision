@@ -35,10 +35,25 @@ import tensorflow as tf
 import metalearning_tf.utils.tf_utils as tf_utils
 
 
+def attach_activation_summary(activation, tensor_name='activation'):
+    '''
+    
+     Attaches a summary that provides a histogram of activations.
+     Attaches a summary that measures the sparsity of activations.
+     
+    :param activation: A tensor representing the activation of a layer 
+    :param tensor_name: A name for this summary
+    :return: None
+    '''
+    tf.summary.histogram(tensor_name+'/activations', activation)
+    tf.summary.scalar(tensor_name+'sparsity', tf.nn.zero_fraction(activation))
+
+
 def attach_to_variable(var,
                        prop_list=('mean', 'stddev', 'min', 'max', 'hist'),
                        scope='summaries'):
     '''
+    
       Attaches summary writer to the given tensorflow variable, so that users
       may view how it makes progress on tensorboard application.
 

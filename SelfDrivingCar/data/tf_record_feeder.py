@@ -22,7 +22,7 @@
     **********************************************************************************
     Author:   Ilker GURCAN
     Date:     4/8/17
-    File:     parallel_data_feeder
+    File:     tf_record_feeder
     Comments: 
     **********************************************************************************
 '''
@@ -32,7 +32,7 @@ import tensorflow as tf
 from utils import constants as consts
 
 
-class ParallelDataFeeder(object):
+class TFRecordFeeder(object):
 
     # Parameters
     __num_threads = None
@@ -70,7 +70,6 @@ class ParallelDataFeeder(object):
         _, serialized_ex = reader.read(self.__file_name_queue)
         features = tf.parse_single_example(serialized_ex,
                                            features=self.__features)
-        # TODO: Should we parametrize its data type? Not sure...
         image = tf.decode_raw(features[consts.IMAGE_RAW], tf.uint8)
         # TODO: Write a comment for why set_shape does not work
         image = tf.reshape(image, self.__image_size)
@@ -108,7 +107,7 @@ class ParallelDataFeeder(object):
                 capacity=min_queue_examples+2*batch_size
             )
         # Display images in the tensorboard visualizer
-        tf.summary.image('images', images)
+        # tf.summary.image('images', images)
 
         return images, labels
 
@@ -127,5 +126,3 @@ class ParallelDataFeeder(object):
                                     batch_size,
                                     min_queue_examples,
                                     is_shuffle)
-
-

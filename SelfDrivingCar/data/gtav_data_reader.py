@@ -22,7 +22,7 @@
     **********************************************************************************
     Author:   Sidharth Sadani
     Date:     3/7/17
-    File:     gtav_data_feeder
+    File:     gtav_data_reader
     Comments: This module loads input data which consist of both video frames
      and associated dependent data such as steering angle, speed, out of road flag, etc.
     **********************************************************************************
