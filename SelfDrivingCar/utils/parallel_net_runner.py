@@ -67,7 +67,7 @@ class ParallelNetRunner(object):
     __config_proto = None
     __graph = None
     __sess = None
-    __global_step = None
+    __step = None
     __train_op = None
     __test_op = None
     __loss = None
@@ -128,19 +128,19 @@ class ParallelNetRunner(object):
         :param data_feeder: 
         :return: 
         '''
-
-        # Fetch a batch of images and labels from sample source
-        images, labels = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
-                                                   ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
-                                                   ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
-                                                   ConfigOptions.SHOULD_SHUFFLE.get_val())
+        with tf.device(consts.CPU_NAME+"0"):
+            # Fetch a batch of images and labels from sample source
+            images, labels = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
+                                                       ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
+                                                       ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
+                                                       ConfigOptions.SHOULD_SHUFFLE.get_val())
         # Build the network and its loss functions
         # Each op name of any loss function starts with 'tower_i/*'
         network = self.__network_class(images=images,
                                        labels=labels,
                                        **self.__net_kwargs)
         network.inference().loss_func()
-        return network.loss()
+        return network.loss
 
     @staticmethod
     def _average_gradients(tower_grads):
@@ -172,7 +172,7 @@ class ParallelNetRunner(object):
 
     def _build_for_training(self):
 
-        with self.__graph.as_default(), tf.device(consts.CPU_NAME+'%d' % 0):
+        with self.__graph.as_default(), tf.device(consts.CPU_NAME+"0"):
             # Necessary if you don't use Trainer from tflearn
             if self.__is_using_tflearn:
                 init_training_mode()
@@ -215,7 +215,6 @@ class ParallelNetRunner(object):
             self.__loss = loss
             # Create a saver for the trained model
             self.__saver = tf.train.Saver(tf.global_variables())
-            self.__global_step = global_step
 
     def _build_for_testing(self):
 
@@ -248,6 +247,10 @@ class ParallelNetRunner(object):
         if not self.__graph:
             self.__graph = tf.Graph()
         if not self.__sess:
+            if not self.__config_proto:
+                self.__config_proto = tf.ConfigProto()
+            self.__config_proto.gpu_options.allow_growth = True
+            self.__config_proto.allow_soft_placement = True
             self.__sess = tf.Session(graph=self.__graph,
                                      config=self.__config_proto)
         if self.__is_for_training:
@@ -273,15 +276,16 @@ class ParallelNetRunner(object):
                 coord = tf.train.Coordinator()
                 threads = tf.train.start_queue_runners(sess=self.__sess,
                                                        coord=coord)
+                self.__step = 1
                 try:
                     while not coord.should_stop():
+                        # Run one step of training/testing process
                         if hasattr(self.__data_feeder, 'before_step'):
                             self.__data_feeder.before_step(self.__sess)
-                        print('Computing a step of %s' %
-                              ('training' if self.__is_for_training else 'testing'))
                         step_func(self, *step_args)
                         if hasattr(self.__data_feeder, 'after_step'):
                             self.__data_feeder.after_step(self.__sess)
+                        self.__step += 1
                 except tf.errors.OutOfRangeError as ex1:
                     print('Run out of Samples...')
                     coord.request_stop(ex1)
@@ -337,8 +341,8 @@ class ParallelNetRunner(object):
 
     # Properties valid for only training
     @property
-    def global_step(self):
-        return self.__global_step
+    def step(self):
+        return self.__step
 
     @property
     def train_op(self):
@@ -351,5 +355,3 @@ class ParallelNetRunner(object):
     @property
     def optimizer(self):
         return self.__optimizer
-
-

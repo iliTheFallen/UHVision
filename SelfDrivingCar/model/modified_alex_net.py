@@ -117,7 +117,7 @@ class ModifiedAlexNet(object):
     def inference(self):
 
         if self.__network:
-            return
+            return self
 
         # input_shape does not have the dimension for batch size.
         # It is specified in training phase. That is why we have

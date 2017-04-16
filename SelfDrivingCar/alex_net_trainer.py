@@ -95,9 +95,8 @@ def prepare_fields():
 
 def _step(runner, summary_writer, summary_op):
 
-    _, loss_values, step = runner.sess.run([runner.train_op,
-                                            runner.loss,
-                                            runner.global_step])
+    _, loss_values = runner.sess.run([runner.train_op, runner.loss])
+    step = runner.step
     if step % 10 == 0:
         loss_format_str = ('%s_loss: %.5f / '
                            '%s_loss: %.5f / '
@@ -110,10 +109,12 @@ def _step(runner, summary_writer, summary_op):
         summary_writer.add_summary(summary_str, step)
         # Save a checkpoint at the end of every epoch
     if step % FLAGS.num_ex_per_epoch == 0:
+        print('Saving Checkpoint...')
         checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
         runner.saver.save(runner.sess,
                           checkpoint_path,
                           global_step=step)
+        print('Finished...')
 
 
 def attach_summary_writers(runner):
@@ -128,56 +129,59 @@ def attach_summary_writers(runner):
 
 def train():
 
-    # Create data feeder
-    data_feeder = TFRecordFeeder(FLAGS.tf_record_file_name,
-                                 FLAGS.num_threads,
-                                 FLAGS.num_epochs,
-                                 prepare_fields(),
-                                 [IM_H, IM_W, IM_D])
-    # Specify session configuration options
-    sess_config = tf.ConfigProto()
-    sess_config.gpu_options.allow_growth = True
-    sess_config.allow_soft_placement = True
-    sess_config.log_device_placement = FLAGS.log_device_placement
-    # Network class' arguments
-    net_kwargs = {
-        'batch_size': ConfigOptions.BATCH_SIZE.get_val(),
-        'num_channels': IM_D,
-        'frame_size': [IM_W, IM_H],
-        'num_classes': 3,  # Steering Angle, Throttle, and Brake
-    }
-    # Create an optimizer
-    opt = Momentum(learning_rate=0.001, momentum=0.9)
-    opt = opt.get_tensor()
-    # Create Parallel Runner
-    # If not specified, Parallel Runner creates
-    # a graph and a session object when its 'build' method is called.
-    # Use them if you need to. You may have access to these objects
-    # through its properties list. Otherwise; specify graph and
-    # session objects using its setter functions right after you
-    # create an instance of it.
-    runner = ParallelNetRunner(
-        ModifiedAlexNet,
-        net_kwargs,
-        data_feeder,
-        opt,
-        True,
-        True
-    )
-    runner.config_proto = sess_config  # Specify custom session config options
-    # Build the network.
-    # Right after this call, graph and session objects are created
-    runner.build()
-    # Add summaries
-    summary_writer = tf.summary.FileWriter(ConfigOptions.TRAIN_DIR.get_val(),
-                                           runner.graph)
-    # Don't add summary writers until you build the network.
-    # All tensors that define graph operations are created after
-    # 'build' method is called.
-    summaries = attach_summary_writers(runner)
-    # Start execution
-    step_args = (summary_writer, summaries)  # Extra args passed to _step function
-    runner.run(_step, step_args)
+    graph = tf.Graph()
+    with graph.as_default():
+        # All operations should be built into the same graph
+        # Create data feeder
+        # Data feeder has operations pushed into the graph
+        data_feeder = TFRecordFeeder(FLAGS.tf_record_file_name,
+                                     FLAGS.num_threads,
+                                     FLAGS.num_epochs,
+                                     prepare_fields(),
+                                     [IM_H, IM_W, IM_D])
+        # Specify session configuration options
+        sess_config = tf.ConfigProto()
+        sess_config.log_device_placement = FLAGS.log_device_placement
+        # Network class' arguments (ModifiedAlexNet)
+        net_kwargs = {
+            'batch_size': ConfigOptions.BATCH_SIZE.get_val(),
+            'num_channels': IM_D,
+            'frame_size': [IM_H, IM_W],
+            'num_classes': 3,  # Steering Angle, Throttle, and Brake
+        }
+        # Create an optimizer
+        opt = Momentum(learning_rate=0.001, momentum=0.9)
+        opt = opt.get_tensor()
+        # Create Parallel Runner
+        # If not specified, Parallel Runner creates
+        # a graph and a session object when its 'build' method is called.
+        # Use them if you need to. You may have access to these objects
+        # through its properties list. Otherwise; specify graph and
+        # session objects using its setter functions right after you
+        # create an instance of it.
+        runner = ParallelNetRunner(
+            ModifiedAlexNet,
+            net_kwargs,
+            data_feeder,
+            opt,
+            True,
+            True
+        )
+        runner.config_proto = sess_config  # Specify custom session config options
+        runner.graph = graph
+        # Build the network.
+        # Right after this call, graph and session objects are created
+        runner.build()
+        # Add summaries
+        summary_writer = tf.summary.FileWriter(ConfigOptions.TRAIN_DIR.get_val(),
+                                               runner.graph)
+        # Don't add summary writers until you build the network.
+        # All tensors that define graph operations are created after
+        # 'build' method is called.
+        summaries = attach_summary_writers(runner)
+        # Start execution
+        step_args = (summary_writer, summaries)  # Extra args passed to _step function
+        runner.run(_step, step_args)
 
 
 def main(argv=None):
