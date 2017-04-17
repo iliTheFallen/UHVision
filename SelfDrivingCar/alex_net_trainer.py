@@ -58,7 +58,7 @@ tf.app.flags.DEFINE_float(ConfigOptions.MIN_FRAC_EX_IN_QUEUE.value, 0.4,
 tf.app.flags.DEFINE_boolean(ConfigOptions.SHOULD_SHUFFLE.value, True,
                             """"Whether to shuffle samples.""")
 # Configuration options for data feeder
-tf.app.flags.DEFINE_integer("num_epochs", 1000,
+tf.app.flags.DEFINE_integer("num_epochs", 300,
                             """"How many times the whole training set has to be fed into network""")
 tf.app.flags.DEFINE_integer("num_threads", 2,
                             """"Number of threads that will enqueue training samples from the sample queue""")

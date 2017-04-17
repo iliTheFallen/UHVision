@@ -60,14 +60,16 @@ def huber_m_loss(labels_tensor,
         loss = tf.reduce_mean(
             tf.square(
                 tf.subtract(labels_tensor, preds_tensor)),
-            name=name)
+            name=name,
+            axis=0)
         return loss
     # All losses will be subjected to LAD
     elif samp_frac == N:
         loss = tf.reduce_mean(
             tf.abs(
                 tf.subtract(labels_tensor, preds_tensor)),
-            name=name)
+            name=name,
+            axis=0)
         return loss
 
     loss = []
