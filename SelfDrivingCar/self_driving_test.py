@@ -140,7 +140,7 @@ def test():
     global gtav_reader
     global count
     gtav_reader = GTAVDataReader(
-        drive_folder='/home/cougarnet.uh.edu/igurcan/Documents/phdStudies' 
+        drive_folder='/home/ilithefallen/Documents/phdThesis' 
                      '/UHVision/SelfDrivingCar/DriveXbox1')
     count = 0
     with tf.Graph().as_default():
@@ -172,7 +172,7 @@ def test():
             # Create a queue which could be used to process the last entry added to that queue
             # Not exceeds the number of frames per second for we don't want to
             # miss more than that many frames.
-            q = LifoQueue(maxsize=8)
+            q = LifoQueue(maxsize=1)
             thread = threading.Thread(target=_produce,
                                       args=(coord, q, alex_net))
             coord.register_thread(thread)

@@ -109,7 +109,8 @@ class ConvertToTFRecord(object):
         num_tuples = 0
         for (frame, label) in self.__reader:
             if im_size != frame.shape[0:2]:
-                new_frame = imresize(frame, size=im_size, interp='bicubic')
+                # Reconstruction sampling (sinc function first greater lobes interpolation)
+                new_frame = imresize(frame, size=im_size, interp='lanczos')
             else:
                 new_frame = frame
             features = self._prepare_features_map(new_frame, label.tolist())

@@ -123,7 +123,7 @@ class ParallelNetRunner(object):
 
     def _tower_ops(self):
         '''
-        Called per GPU. Creates a replica of AlexNet on the
+        Called per GPU. Creates a replica of network on the
          specified GPU.
         :param data_feeder: 
         :return: 

@@ -106,12 +106,11 @@ def _step(runner, summary_writer, summary_op):
                                  consts.THROTTLE, loss_values[1],
                                  consts.BRAKE, loss_values[2]))
     if step % 100 == 0:
+        print('Saving Summary & Checkpoint...')
         summary_str = runner.sess.run(summary_op)
         summary_writer.add_summary(summary_str, step)
-        # Save a checkpoint at the end of every epoch
-    if step % FLAGS.num_ex_per_epoch == 0:
-        print('Saving Checkpoint...')
-        checkpoint_path = os.path.join(FLAGS.train_dir, 'model.ckpt')
+        checkpoint_path = os.path.join(ConfigOptions.TRAIN_DIR.get_val(),
+                                       'model.ckpt')
         runner.saver.save(runner.sess,
                           checkpoint_path,
                           global_step=step)
@@ -149,6 +148,7 @@ def train():
             'num_channels': IM_D,
             'frame_size': [IM_H, IM_W],
             'num_classes': 3,  # Steering Angle, Throttle, and Brake
+            'percentile': 0.0  # LSD will be applied to all losses
         }
         # Create an optimizer
         opt = Momentum(learning_rate=0.001, momentum=0.9)

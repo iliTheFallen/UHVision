@@ -32,7 +32,7 @@ import tensorflow as tf
 from PIL import Image
 
 from data.convert_to_tf_record import ConvertToTFRecord
-from data.gtav_data_reader import GTAVDataFeeder
+from data.gtav_data_reader import GTAVDataReader
 from data.tf_record_feeder import TFRecordFeeder
 from utils import loss_funcs as loss
 from utils import constants as consts
@@ -62,7 +62,7 @@ def test_huber_m_cost():
 
 def convert_to_tf_record():
 
-    reader = GTAVDataFeeder(drive_folder=
+    reader = GTAVDataReader(drive_folder=
                             '/home/ilithefallen/Documents/phdThesis'
                             '/UHVision/SelfDrivingCar/DriveXbox1')
     types = [  # Order matters
@@ -147,6 +147,6 @@ def pack_unpack(**kwargs):
 
 if __name__ == "__main__":
     # test_huber_m_cost()
-    # convert_to_tf_record()
+    convert_to_tf_record()
     # test_parallel_data_feeder()
-    pack_unpack(name='Ilker GURCAN', soft_id=1456789)
+    # pack_unpack(name='Ilker GURCAN', soft_id=1456789)
