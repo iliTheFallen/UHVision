@@ -95,6 +95,7 @@ def prepare_fields():
 
 def _step(runner, summary_writer, summary_op):
 
+    # Fetch a tuple from the queue
     _, loss_values = runner.sess.run([runner.train_op, runner.loss])
     step = runner.step
     if step % 10 == 0:
@@ -170,7 +171,7 @@ def train():
         runner.config_proto = sess_config  # Specify custom session config options
         runner.graph = graph
         # Build the network.
-        # Right after this call, graph and session objects are created
+        # Right after this call, graph and session objects are created/set
         runner.build()
         # Add summaries
         summary_writer = tf.summary.FileWriter(ConfigOptions.TRAIN_DIR.get_val(),

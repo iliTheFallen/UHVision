@@ -38,7 +38,7 @@ import json
 # print "Hello World"
 
 
-class GTAVDataFeeder(object):
+class GTAVDataReader(object):
 
     def __init__ (self,
                   episodeSize=80,

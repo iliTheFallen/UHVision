@@ -224,7 +224,8 @@ class ParallelNetRunner(object):
                                                   ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
                                                   ConfigOptions.SHOULD_SHUFFLE.get_val())
             print('Building network on GPU:%d...' % 0)
-            network = self.__network_class(images=images, **self.__net_kwargs)
+            net = self.__network_class(images=images, **self.__net_kwargs)
+            net.inference()
             # Restore the moving average version of the learned variables for evaluation
             if hasattr(FLAGS, ConfigOptions.MOVING_AVERAGE_DECAY.value):
                 variable_averages = tf.train.ExponentialMovingAverage(ConfigOptions.MOVING_AVERAGE_DECAY.get_val())
@@ -239,7 +240,7 @@ class ParallelNetRunner(object):
                     saver.restore(self.__sess, ckpt.model_checkpoint_path)
                 else:
                     raise ValueError('No checkpoint file is found!')
-        self.__test_op = network
+        self.__test_op = net.network
         self.__saver = saver
 
     def build(self):
@@ -355,3 +356,8 @@ class ParallelNetRunner(object):
     @property
     def optimizer(self):
         return self.__optimizer
+
+    # Properties valid for only testing
+    @property
+    def test_op(self):
+        return self.__test_op

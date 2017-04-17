@@ -33,6 +33,8 @@ from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
 
+import numpy as np
+
 from utils import loss_funcs as loss_func
 
 
@@ -109,9 +111,10 @@ class ModifiedAlexNet(object):
     def prepare_dict(self, input_, target):
 
         feed_dict = {
-            self.__input_ph: input_,
-            self.__target_ph: target
+            self.__input_ph: input_
         }
+        if target:
+            feed_dict[self.__target_ph] = target
         return feed_dict
 
     def inference(self):
