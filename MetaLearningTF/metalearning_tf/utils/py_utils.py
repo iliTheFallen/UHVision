@@ -33,7 +33,7 @@ import numpy as np
 def is_empty(o):
 
     if isinstance(o, (tuple, list)):
-        if len(object) < 1:
+        if len(o) < 1:
             return True
         else:
             return False
