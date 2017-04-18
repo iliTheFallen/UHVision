@@ -97,6 +97,7 @@ def main():
     # Create Neural-Network which is composed of a sequence of controller units
     # and a single external memory unit
     nn = NNModel(batch_size=sample_generator.batch_size,
+                 seq_len=seq_len,
                  input_size=IM_SIZE*IM_SIZE,
                  num_classes=sample_generator.nb_samples,
                  controller_size=200,
@@ -106,19 +107,15 @@ def main():
                  gamma=0.95)
     with tf.Graph().as_default():
         # Build common tensors used throughout entire session
-        nn.build(seq_len)
+        nn.build()
+        nn.inference().loss_func().train_func()
         # Construct the architecture
-        labels, model, loss, train_op = nn\
-            .generate_model()\
-            .loss()\
-            .train()\
-            .get_all()
         with tf.Session() as sess:
             # Add required summaries for tensorboard
             writer, acc, merged = prepare_cat_summary(sess.graph,
-                                                      loss,
-                                                      labels,
-                                                      model,
+                                                      nn.loss,
+                                                      nn.labels,
+                                                      nn.preds,
                                                       sample_generator.batch_size,
                                                       sample_generator.nb_samples,
                                                       sample_generator.nb_samples_per_class)
@@ -137,7 +134,7 @@ def main():
                 #    target : (batch_size)x(nb_samples*nb_samples_per_class)
                 for e, (input_, target) in sample_generator:
                     feed_dict = nn.prepare_dict(input_, target)
-                    _, score, accu = sess.run([train_op, loss, acc], feed_dict=feed_dict)
+                    _, score, accu = sess.run([nn.train_op, nn.loss, acc], feed_dict=feed_dict)
                     acc_list += accu
                     scores.append(score)
                     if e > 0 and e % SUMMARY_FREQ == 0:

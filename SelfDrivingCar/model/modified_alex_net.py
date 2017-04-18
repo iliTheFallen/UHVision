@@ -33,9 +33,8 @@ from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
 
-import numpy as np
-
-from utils import loss_funcs as loss_func
+from metalearning_tf.utils import loss_funcs as loss_func
+from metalearning_tf.utils import py_utils as pu
 
 
 class ModifiedAlexNet(object):
@@ -95,25 +94,25 @@ class ModifiedAlexNet(object):
                               frame_size[1],
                               num_channels]
         self.__output_shape = [batch_size, self.__num_classes]
-        # Tensors are objects. Use 'is not' when you check whether it is empty or not
-        if self.__input_ph is None and self.__target_ph is None:
-            self.__input_ph, self.__target_ph = self._create_placeholders()
+        self._create_placeholders()
 
     def _create_placeholders(self):
 
-        input_ph = tf.placeholder(tf.float32,
-                                  self.__input_shape, name="input_ph")
-        target_ph = tf.placeholder(tf.float32,
-                                   self.__output_shape,
-                                   name="output_ph")
-        return input_ph, target_ph
+        if pu.is_empty(self.__input_ph):
+            self.__input_ph = tf.placeholder(tf.float32,
+                                             self.__input_shape,
+                                             name="input_ph")
+        if pu.is_empty(self.__target_ph):
+            self.__target_ph = tf.placeholder(tf.float32,
+                                              self.__output_shape,
+                                              name="output_ph")
 
     def prepare_dict(self, input_, target):
 
-        feed_dict = {
-            self.__input_ph: input_
-        }
-        if target:
+        feed_dict = {}
+        if not pu.is_empty(input_):
+            feed_dict[self.__input_ph] = input_
+        if not pu.is_empty(target):
             feed_dict[self.__target_ph] = target
         return feed_dict
 
@@ -214,13 +213,15 @@ class ModifiedAlexNet(object):
                                  name='total_loss')
         return self
 
-    def train(self):
+    def train_func(self):
 
-        if not self.__train_op:
-            # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)
-            momentum = Momentum(learning_rate=self.__learning_rate,
-                                momentum=self.__momentum)
-            self.__train_op = momentum.get_tensor()
+        if self.__train_op:
+            return self
+
+        # decayed_learning_rate = learning_rate *  decay_rate ^ (global_step / decay_steps)
+        momentum = Momentum(learning_rate=self.__learning_rate,
+                            momentum=self.__momentum)
+        self.__train_op = momentum.get_tensor()
         return self
 
     @property

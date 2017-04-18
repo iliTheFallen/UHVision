@@ -98,13 +98,11 @@ class MemoryUnit(object):
         self.__wr_0 = tf_utils.create_one_hot_var((self.__batch_size, self.__num_read_heads),
                                                   self.__memory_size[0])
         self.__wu_0 = tf_utils.create_one_hot_var(self.__batch_size, self.__memory_size[0])
-        self.__r_0 = tf.zeros([self.__batch_size, self.__num_read_heads*self.__memory_size[1]], dtype=tf.float32)
+        self.__r_0 = tf.zeros([self.__batch_size,
+                               self.__num_read_heads*self.__memory_size[1]],
+                              dtype=tf.float32)
         print()
         print()
-
-    def get_init_op_memory(self):
-
-        return self.__m_0, self.__r_0, self.__wr_0, self.__wu_0
 
     def update_mem(self, m_tm1, wr_tm1, wu_tm1, k_t, a_t, s_t):
         '''
@@ -171,3 +169,19 @@ class MemoryUnit(object):
         r_t = tf.reshape(tf.matmul(wr_t, m_t), [self.__batch_size, -1])  # BSx(NR.MIL)
 
         return m_t, r_t, wr_t, wu_t
+
+    @property
+    def m_0(self):
+        return self.__m_0
+
+    @property
+    def r_0(self):
+        return self.__r_0
+
+    @property
+    def wr_0(self):
+        return self.__wr_0
+
+    @property
+    def wu_0(self):
+        return self.__wu_0

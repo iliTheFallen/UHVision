@@ -154,7 +154,9 @@ def attach_cat_pred_dist(predictions,
                        parallel_iterations=1,
                        back_prop=False)
         acc, _ = tf.split(out, [nb_samples_per_class, nb_classes], axis=1)
-        acc = tf.reduce_mean(tf.realdiv(acc, tf.constant([nb_classes], dtype=tf.float32)), axis=0)
+        acc = tf.reduce_mean(tf.realdiv(acc, tf.constant([nb_classes],
+                                                         dtype=tf.float32)),
+                             axis=0)
         # Attach summary writers
         for i in range(nb_samples_per_class):
             acc_i = acc[i]

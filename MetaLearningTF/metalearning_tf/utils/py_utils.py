@@ -20,9 +20,28 @@
     Please contact Hien Nguyen V for more info about licensing hvnguy35@central.uh.edu, 
     and other members of the UHVision Lab via github issues section.
     **********************************************************************************
-    Author:   igurcan
-    Date:     4/8/17
-    File:     tf_utils
-    Comments: 
+    Author:   Ilker GURCAN
+    Date:     4/17/17
+    File:     py_utils
+    Comments: Python utility functions
     **********************************************************************************
 '''
+
+import numpy as np
+
+
+def is_empty(o):
+
+    if isinstance(o, (tuple, list)):
+        if len(object) < 1:
+            return True
+        else:
+            return False
+    elif isinstance(o, np.ndarray):
+        if o.size < 1:
+            return True
+        else:
+            return False
+    elif not o:
+        return True
+    return False

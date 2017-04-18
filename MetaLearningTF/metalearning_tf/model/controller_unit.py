@@ -99,10 +99,9 @@ class ControllerUnit(object):
         with tf.variable_scope(ControllerUnit.LAYER_HIDDEN):
             # input-->forget-->output-->approximated cell content
             # Weights associating input to the current hidden units
-            num_inputs = self.__input_size + self.__num_classes
-            init = tf_utils.glorot_uniform_init([num_inputs, 4 * self.__controller_size])
+            init = tf_utils.glorot_uniform_init([self.__input_size, 4 * self.__controller_size])
             tf.get_variable(ControllerUnit.NODE_HIDDEN_W_XH,
-                            [num_inputs, 4 * self.__controller_size],
+                            [self.__input_size, 4 * self.__controller_size],
                             initializer=init)
             tf.get_variable(ControllerUnit.NODE_HIDDEN_BI,
                             [4 * self.__controller_size],
@@ -156,10 +155,6 @@ class ControllerUnit(object):
                             initializer=tf.constant_initializer(0.0))
         print()
         print()
-
-    def get_init_op_state(self):
-
-        return self.__c_0, self.__h_0
 
     @staticmethod
     def get_node_out():
@@ -244,3 +239,10 @@ class ControllerUnit(object):
 
         return c_t, h_t, k_t, a_t, s_t
 
+    @property
+    def c_0(self):
+        return self.__c_0
+
+    @property
+    def h_0(self):
+        return self.__h_0

@@ -50,9 +50,8 @@ def huber_m_loss(labels_tensor,
     :param name: Operation name
     :return: Huber-M Loss tensor
     '''
-    # Step-1) Find absolute difference between labels & predictions (residuals)
-    res = tf.abs(tf.subtract(labels_tensor, preds_tensor))
-    [N, F] = res.get_shape().as_list()
+
+    [N, F] = labels_tensor.get_shape().as_list()
     samp_frac = int(round(N*percentile))
 
     # All losses will be subjected to LSD
@@ -72,6 +71,8 @@ def huber_m_loss(labels_tensor,
             axis=0)
         return loss
 
+    # Step-1) Find absolute difference between labels & predictions (residuals)
+    res = tf.abs(tf.subtract(labels_tensor, preds_tensor))
     loss = []
     # Step-2) Compute Huber-M Loss for each feature column
     for i in range(F):
