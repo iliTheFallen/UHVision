@@ -23,7 +23,9 @@
     Author:   Ilker GURCAN
     Date:     4/12/17
     File:     parallel_net_runner
-    Comments: Runs training or testing procedure on the specified model.
+    Comments: Runs training or testing procedure on the specified model using 
+     multiple-GPUs. Computing the model is conducted on GPUs regardless whether 
+     it is a training or testing procedure.
     **********************************************************************************
 '''
 
@@ -121,7 +123,7 @@ class ParallelNetRunner(object):
                 raise ValueError('Training mode is enabled; '
                                  'but training directory is not specified!')
 
-    def _tower_ops(self):
+    def _tower_ops_training(self):
         '''
         Called per GPU. Creates a replica of network on the
          specified GPU.
@@ -184,11 +186,11 @@ class ParallelNetRunner(object):
             loss = None
             # Building network replicas and their corresponding losses on specified # of GPUs
             with tf.variable_scope(tf.get_variable_scope()) as var_scope:
-                for i in range(FLAGS.num_gpus):
+                for i in range(ConfigOptions.NUM_GPUS.get_val()):
                     with tf.device(consts.GPU_NAME + '%d' % i):
                         with tf.name_scope(consts.TOWER_NAME + '%d' % i) as scope:
                             print('Building network replica for GPU:%d...' % i)
-                            loss = self._tower_ops()
+                            loss = self._tower_ops_training()
                             # Share all parameters across all GPUs
                             var_scope.reuse_variables()
                             # Add operations to compute gradients on the current GPU
@@ -216,16 +218,24 @@ class ParallelNetRunner(object):
             # Create a saver for the trained model
             self.__saver = tf.train.Saver(tf.global_variables())
 
+    def _tower_ops_testing(self):
+
+        images, _ = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
+                                              ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
+                                              ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
+                                              ConfigOptions.SHOULD_SHUFFLE.get_val())
+        net = self.__network_class(images=images, **self.__net_kwargs)
+        net.inference()
+        return net.network
+
     def _build_for_testing(self):
 
-        with self.__graph.as_default():
-            images, _ = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
-                                                  ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
-                                                  ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
-                                                  ConfigOptions.SHOULD_SHUFFLE.get_val())
-            print('Building network on GPU:%d...' % 0)
-            net = self.__network_class(images=images, **self.__net_kwargs)
-            net.inference()
+        with self.__graph.as_default(), tf.device(consts.CPU_NAME+"0"):
+            self.__test_op = []
+            for i in range(ConfigOptions.NUM_GPUS.get_val()):
+                print('Building network on GPU:%d...' % i)
+                with tf.device(consts.GPU_NAME+str(i)):
+                    self.__test_op.append(self._tower_ops_testing())
             # Restore the moving average version of the learned variables for evaluation
             if hasattr(FLAGS, ConfigOptions.MOVING_AVERAGE_DECAY.value):
                 variable_averages = tf.train.ExponentialMovingAverage(ConfigOptions.MOVING_AVERAGE_DECAY.get_val())
@@ -240,7 +250,6 @@ class ParallelNetRunner(object):
                     saver.restore(self.__sess, ckpt.model_checkpoint_path)
                 else:
                     raise ValueError('No checkpoint file is found!')
-        self.__test_op = net.network
         self.__saver = saver
 
     def build(self):
