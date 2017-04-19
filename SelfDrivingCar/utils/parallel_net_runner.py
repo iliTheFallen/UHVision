@@ -188,7 +188,7 @@ class ParallelNetRunner(object):
             with tf.variable_scope(tf.get_variable_scope()) as var_scope:
                 for i in range(ConfigOptions.NUM_GPUS.get_val()):
                     with tf.device(consts.GPU_NAME + '%d' % i):
-                        with tf.name_scope(consts.TOWER_NAME + '%d' % i) as scope:
+                        with tf.name_scope(consts.TOWER_NAME + '%d' % i):
                             print('Building network replica for GPU:%d...' % i)
                             loss = self._tower_ops_training()
                             # Share all parameters across all GPUs
@@ -220,10 +220,11 @@ class ParallelNetRunner(object):
 
     def _tower_ops_testing(self):
 
-        images, _ = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
-                                              ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
-                                              ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
-                                              ConfigOptions.SHOULD_SHUFFLE.get_val())
+        with tf.device(consts.CPU_NAME + "0"):
+            images, _ = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
+                                                  ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
+                                                  ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
+                                                  ConfigOptions.SHOULD_SHUFFLE.get_val())
         net = self.__network_class(images=images, **self.__net_kwargs)
         net.inference()
         return net.network
@@ -235,7 +236,8 @@ class ParallelNetRunner(object):
             for i in range(ConfigOptions.NUM_GPUS.get_val()):
                 print('Building network on GPU:%d...' % i)
                 with tf.device(consts.GPU_NAME+str(i)):
-                    self.__test_op.append(self._tower_ops_testing())
+                    with tf.name_scope(consts.TOWER_NAME + '%d' % i):
+                        self.__test_op.append(self._tower_ops_testing())
             # Restore the moving average version of the learned variables for evaluation
             if hasattr(FLAGS, ConfigOptions.MOVING_AVERAGE_DECAY.value):
                 variable_averages = tf.train.ExponentialMovingAverage(ConfigOptions.MOVING_AVERAGE_DECAY.get_val())
