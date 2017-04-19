@@ -33,11 +33,11 @@ from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.normalization import local_response_normalization
 from tflearn.optimizers import Momentum
 
+from metalearning_tf.model.base_model import BaseModel
 from metalearning_tf.utils import loss_funcs as loss_func
-from metalearning_tf.utils import py_utils as pu
 
 
-class ModifiedAlexNet(object):
+class ModifiedAlexNet(BaseModel):
 
     # Parameters
     __num_classes = None  # -Steering Angle, -Velocity, -Throttle, -Brake
@@ -48,12 +48,8 @@ class ModifiedAlexNet(object):
 
     # Fields used by the class internally
     __layer_names = None
-    __input_ph = None
-    __target_ph = None
 
     # Class properties
-    __input_shape = None
-    __output_shape = None
     __network = None  # Graph for AlexNet
     __train_op = None  # Operation used to optimize loss function
     __loss = None  # Loss function to be optimized, which is based on predictions
@@ -71,8 +67,6 @@ class ModifiedAlexNet(object):
                  momentum=0.9,
                  is_only_features=False):
 
-        self.__input_ph = images
-        self.__target_ph = labels
         self.__num_classes = num_classes
         self.__learning_rate = learning_rate
         self.__momentum = momentum
@@ -89,32 +83,17 @@ class ModifiedAlexNet(object):
             'fully2nd',
             'fully3rd'
         ]
-        self.__input_shape = [batch_size,
-                              frame_size[0],
-                              frame_size[1],
-                              num_channels]
-        self.__output_shape = [batch_size, self.__num_classes]
-        self._create_placeholders()
 
-    def _create_placeholders(self):
+        input_shape = (batch_size,
+                       frame_size[0],
+                       frame_size[1],
+                       num_channels)
+        output_shape = (batch_size, self.__num_classes)
 
-        if pu.is_empty(self.__input_ph):
-            self.__input_ph = tf.placeholder(tf.float32,
-                                             self.__input_shape,
-                                             name="input_ph")
-        if pu.is_empty(self.__target_ph):
-            self.__target_ph = tf.placeholder(tf.float32,
-                                              self.__output_shape,
-                                              name="output_ph")
-
-    def prepare_dict(self, input_, target):
-
-        feed_dict = {}
-        if not pu.is_empty(input_):
-            feed_dict[self.__input_ph] = input_
-        if not pu.is_empty(target):
-            feed_dict[self.__target_ph] = target
-        return feed_dict
+        super(ModifiedAlexNet, self).__init__(input_shape,
+                                              output_shape,
+                                              inputs=images,
+                                              targets=labels)
 
     def inference(self):
 
@@ -223,14 +202,6 @@ class ModifiedAlexNet(object):
                             momentum=self.__momentum)
         self.__train_op = momentum.get_tensor()
         return self
-
-    @property
-    def input_shape(self):
-        return self.__input_shape
-
-    @property
-    def output_shape(self):
-        return self.__output_shape
 
     @property
     def network(self):

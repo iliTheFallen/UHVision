@@ -31,14 +31,14 @@
 
 import tensorflow as tf
 
+from metalearning_tf.model.base_model import BaseModel
 from metalearning_tf.model.memory import MemoryUnit
 from metalearning_tf.model.controller_unit import ControllerUnit
 from metalearning_tf.utils import loss_funcs
-from metalearning_tf.utils import py_utils as pu
 import metalearning_tf.utils.tf_utils as tf_utils
 
 
-class NNModel(object):
+class NNModel(BaseModel):
     # Layers
     LAYER_NN_OUT = "nnOut"
 
@@ -50,7 +50,6 @@ class NNModel(object):
     __is_for_regress = None  # Whether network is built for regression or classification
     __batch_size = None  # Number of samples fed into network at a particular time t
     __seq_len = None  # How many times RNN is unrolled
-    __input_size = None  # The length of the input vector
     __num_classes = None  # Number of classes/labels
     __controller_size = None  # How many hidden units the RNN cell has
     __memory_size = None  # 2D Tuple specifying (numberOfElements)X(sizeOfEachElement)
@@ -61,10 +60,6 @@ class NNModel(object):
     # Two main components that this nn_model tries to fuse one with another
     __controller = None
     __memory = None
-
-    # Placeholders
-    __input_ph = None
-    __target_ph = None
 
     # Used for chain call of generate_model(), loss(), train()
     __labels = None
@@ -87,12 +82,9 @@ class NNModel(object):
                  percentile=0.5,
                  gamma=0.95):
 
-        self.__input_ph = inputs
-        self.__target_ph = targets
         self.__is_for_regress = is_for_regress
         self.__batch_size = batch_size
         self.__seq_len = seq_len
-        self.__input_size = input_size
         self.__num_classes = num_classes
         self.__controller_size = controller_size
         self.__memory_size = memory_size
@@ -111,46 +103,27 @@ class NNModel(object):
                                    memory_size,
                                    num_read_heads,
                                    gamma)
+        input_ph_size = (self.__batch_size,
+                         self.__seq_len,
+                         input_size)
+        input_type = tf.float32
+        if is_for_regress:
+            target_size = (self.__batch_size,
+                           self.__seq_len,
+                           self.__num_classes)
+            target_type = tf.float32
+        else:
+            target_size = (self.__batch_size, self.__seq_len)
+            target_type = tf.int32
+        super(NNModel, self).__init__(input_ph_size,
+                                      target_size,
+                                      input_type,
+                                      target_type,
+                                      inputs=inputs,
+                                      targets=targets)
 
     # TODO: Add sanity check for whether the provided arguments are valid
     # TODO: in the specified mode (classification OR regression)
-
-    def prepare_dict(self, input_, target):
-
-        feed_dict = {}
-        if not pu.is_empty(input_):
-            feed_dict[self.__input_ph] = input_
-        if not pu.is_empty(target):
-            feed_dict[self.__target_ph] = target
-        return feed_dict
-
-    def _create_placeholders(self):
-        '''
-        Generates placeholder variables for feeding dictionary with
-         input tensors.
-         
-        :return: input_ph, target_ph
-        '''
-
-        print('Generating placeholders...')
-        with tf.name_scope("mannPH"):
-            if pu.is_empty(self.__input_ph):
-                self.__input_ph = tf.placeholder(tf.float32,
-                                                 (self.__batch_size,
-                                                  self.__seq_len,
-                                                  self.__input_size),
-                                                 "input_ph")
-            if pu.is_empty(self.__target_ph):
-                if self.__is_for_regress:
-                    self.__target_ph = tf.placeholder(tf.float32,
-                                                      (self.__batch_size,
-                                                       self.__seq_len,
-                                                       self.__num_classes),
-                                                      "target_ph")
-                else:
-                    self.__target_ph = tf.placeholder(tf.int32,
-                                                      (self.__batch_size, self.__seq_len),
-                                                      "target_ph")
 
     def _create_output_nodes(self):
         '''
@@ -193,7 +166,6 @@ class NNModel(object):
         self.__controller.build()
         self.__memory.build()
         self._create_output_nodes()
-        self._create_placeholders()
         print()
         print()
 
@@ -239,15 +211,17 @@ class NNModel(object):
                                  self.__num_classes])
         offset_target = tf.concat([null, wht_last_tar], axis=1)
         # Now concatenate input and offset_target along the 3rd dimension
-        act_input_seq = tf.concat([self.__input_ph, offset_target], axis=2)  # BSxSLx(input_size+num_classes)
-
+        act_input_seq = tf.concat([super(NNModel, self).input_ph,
+                                   offset_target],
+                                  axis=2)  # BSxSLx(input_size+num_classes)
         return act_input_seq
 
     def inference(self):
 
+        target_ph = super(NNModel, self).target_ph
         out_shape = (self.__batch_size*self.__seq_len,
                      self.__num_classes)
-        labels = self.__target_ph if self.__is_for_regress else tf.to_int64(self.__target_ph)
+        labels = target_ph if self.__is_for_regress else tf.to_int64(target_ph)
         act_input_seq = self._offset_input(labels)
 
         print('****************************************************************')
@@ -280,7 +254,7 @@ class NNModel(object):
         preds = tf.reshape(preact, out_shape)  # (BS.SL)x(num_classes)
 
         self.__labels = labels if self.__is_for_regress else tf.reshape(labels, [-1])
-        self.__preds = preds  # NEVER EVER APPLY SOFTMAX FOR IT WILL BE APPLIED WHEN LOSS FUNCTION IS DEFINED
+        self.__preds = preds  # NEVER EVER APPLY SOFT-MAX FOR IT WILL BE APPLIED WHEN LOSS FUNCTION IS DEFINED
         return self
 
     def loss_func(self):

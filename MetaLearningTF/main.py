@@ -96,16 +96,16 @@ def main():
     seq_len = sample_generator.nb_samples*sample_generator.nb_samples_per_class
     # Create Neural-Network which is composed of a sequence of controller units
     # and a single external memory unit
-    nn = NNModel(batch_size=sample_generator.batch_size,
-                 seq_len=seq_len,
-                 input_size=IM_SIZE*IM_SIZE,
-                 num_classes=sample_generator.nb_samples,
-                 controller_size=200,
-                 memory_size=(128, 40),
-                 num_read_heads=4,
-                 learning_rate=1e-3,
-                 gamma=0.95)
     with tf.Graph().as_default():
+        nn = NNModel(batch_size=sample_generator.batch_size,
+                     seq_len=seq_len,
+                     input_size=IM_SIZE * IM_SIZE,
+                     num_classes=sample_generator.nb_samples,
+                     controller_size=200,
+                     memory_size=(128, 40),
+                     num_read_heads=4,
+                     learning_rate=1e-3,
+                     gamma=0.95)
         # Build common tensors used throughout entire session
         nn.build()
         nn.inference().loss_func().train_func()

@@ -33,11 +33,13 @@
 import tensorflow as tf
 
 from model.modified_alex_net import ModifiedAlexNet
+from metalearning_tf.model.base_model import BaseModel
 from metalearning_tf.model.nn_model import NNModel
 from metalearning_tf.utils import py_utils as pu
+from metalearning_tf.utils import loss_funcs
 
 
-class MannCnn(object):
+class MannCnn(BaseModel):
 
     # Configuration options
     __seq_len = None
@@ -51,6 +53,7 @@ class MannCnn(object):
     # Used internally by the class
     __mann = None
     __cnn = None
+    __loss = None
 
     def __init__(self,
                  images=None,
@@ -63,8 +66,6 @@ class MannCnn(object):
                  learning_rate=0.001,
                  momentum=0.9):
 
-        self.__input_ph = images
-        self.__target_ph = labels
         self.__seq_len = seq_len
         self.__num_channels = num_channels
         self.__frame_size = frame_size
@@ -73,27 +74,49 @@ class MannCnn(object):
         self.__learning_rate = learning_rate
         self.__momentum = momentum
 
-        self._create_place_holders()
-
-    def _create_place_holders(self):
-
-        if pu.is_empty(self.__input_ph):
-            self.__input_ph = tf.placeholder(tf.float32,
-                                             (1,  # Batch size
-                                              self.__frame_size[0], self.__frame_size[1],  # Frame size
-                                              self.__num_channels),  # # of channels
-                                             "input_ph")
-        if pu.is_empty(self.__target_ph):
-            self.__target_ph = tf.placeholder(tf.float32,
-                                              (self.__seq_len, self.__num_classes),
-                                              "target_ph")
+        input_size = (1,  # Batch size
+                      self.__frame_size[0],  # Frame Height
+                      self.__frame_size[1],  # Frame Width
+                      self.__num_channels)
+        target_size = (self.__seq_len, self.__num_classes)
+        super(MannCnn, self).__init__(input_size,
+                                      target_size,
+                                      inputs=images,
+                                      targets=labels)
 
     def inference(self):
 
-        self.__cnn = ModifiedAlexNet(self.__input_ph,
+        if not pu.is_empty(self.__cnn):
+            return self
+
+        self.__cnn = ModifiedAlexNet(super(MannCnn, self).input_ph,
                                      batch_size=1,  # Will feed one sample at a time
                                      num_channels=self.__num_channels,
                                      frame_size=self.__frame_size,
                                      num_classes=self.__num_classes,
                                      is_only_features=True)
         input_to_mann = self.__cnn.inference().network
+        self.__mann = NNModel(inputs=input_to_mann,
+                              targets=super(MannCnn, self).target_ph,
+                              is_for_regress=True,
+                              batch_size=1,
+                              seq_len=self.__seq_len,
+                              input_size=input_to_mann.get_shape().as_list(),
+                              num_classes=self.__num_classes)
+        self.__mann.build()
+
+        return self
+
+    def loss_func(self):
+
+        self.__loss = loss_funcs.huber_m_loss(super(MannCnn, self).target_ph,
+                                              self.__mann.preds,
+                                              self.__percentile,
+                                              name='loss')
+
+    def train_func(self):
+        pass
+
+    @property
+    def loss(self):
+        self.__loss
