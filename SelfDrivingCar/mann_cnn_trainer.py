@@ -20,9 +20,9 @@
     Please contact Hien Nguyen V for more info about licensing hvnguy35@central.uh.edu, 
     and other members of the UHVision Lab via github issues section.
     **********************************************************************************
-    Author:   Ilker GURCAN
-    Date:     4/8/17
-    File:     driver_network
+    Author:   igurcan
+    Date:     4/18/17
+    File:     mann_cnn_trainer
     Comments: 
     **********************************************************************************
 '''

@@ -351,11 +351,11 @@ class ParallelNetRunner(object):
     def is_using_tflearn(self):
         return self.__is_using_tflearn
 
-    # Properties valid for only training
     @property
     def step(self):
         return self.__step
 
+    # Properties valid for only training
     @property
     def train_op(self):
         return self.__train_op

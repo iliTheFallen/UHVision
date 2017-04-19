@@ -64,7 +64,7 @@ class ModifiedAlexNet(object):
                  labels=None,
                  batch_size=2,
                  num_channels=3,
-                 frame_size=(800, 600),
+                 frame_size=(300, 400),
                  num_classes=3,
                  percentile=0.5,
                  learning_rate=0.001,

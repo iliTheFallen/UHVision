@@ -31,11 +31,11 @@
 
 import tensorflow as tf
 
-import metalearning_tf.utils.tf_utils as tf_utils
 from metalearning_tf.model.memory import MemoryUnit
 from metalearning_tf.model.controller_unit import ControllerUnit
 from metalearning_tf.utils import loss_funcs
 from metalearning_tf.utils import py_utils as pu
+import metalearning_tf.utils.tf_utils as tf_utils
 
 
 class NNModel(object):

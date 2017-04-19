@@ -146,7 +146,7 @@ def train():
         net_kwargs = {
             'batch_size': ConfigOptions.BATCH_SIZE.get_val(),
             'num_channels': IM_D,
-            'frame_size': [IM_H, IM_W],
+            'frame_size': (IM_H, IM_W),
             'num_classes': 3,  # Steering Angle, Throttle, and Brake
             'percentile': 0.0  # LSD will be applied to all losses
         }
