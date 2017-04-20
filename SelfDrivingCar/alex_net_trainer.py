@@ -148,7 +148,7 @@ def train():
             'num_channels': IM_D,
             'frame_size': (IM_H, IM_W),
             'num_classes': 3,  # Steering Angle, Throttle, and Brake
-            'percentile': 0.1  # LSD will be applied to all losses
+            'percentile': 0.3  # LSD will be applied to all losses
         }
         # Create an optimizer
         opt = Momentum(learning_rate=0.001, momentum=0.9)
