@@ -119,4 +119,5 @@ class MannCnn(BaseModel):
 
     @property
     def loss(self):
-        self.__loss
+        return self.__loss
+

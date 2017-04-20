@@ -41,6 +41,7 @@ class TFRecordFeeder(object):
 
     # Fields used by the class internally
     __file_name_queue = None
+    __reader = None
     __features = None
 
     def __init__(self,
@@ -58,16 +59,13 @@ class TFRecordFeeder(object):
         self.__features = {}
         for (name, t) in self.__fields:
             self.__features[name] = tf.FixedLenFeature([], t)
-        # Its name is a bit ambiguous; but it has all records in it.
-        # QueueRunner will read records (pair of image & label) until this file
-        # is exhausted. And it queues the same file for 'num_epochs' times
         self.__file_name_queue = tf.train.string_input_producer([tf_record_file_name],
                                                                 num_epochs=num_epochs)
+        self.__reader = tf.TFRecordReader()
 
     def _read_and_decode(self):
 
-        reader = tf.TFRecordReader()
-        _, serialized_ex = reader.read(self.__file_name_queue)
+        _, serialized_ex = self.__reader.read(self.__file_name_queue)
         features = tf.parse_single_example(serialized_ex,
                                            features=self.__features)
         image = tf.decode_raw(features[consts.IMAGE_RAW], tf.uint8)

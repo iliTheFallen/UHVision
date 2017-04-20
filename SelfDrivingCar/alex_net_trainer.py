@@ -51,14 +51,14 @@ tf.app.flags.DEFINE_integer(ConfigOptions.NUM_EX_PER_EPOCH.value, 1024,
                             """"Number of samples in an epoch""")
 tf.app.flags.DEFINE_float(ConfigOptions.MOVING_AVERAGE_DECAY.value, 0.9999,
                           """"Decay rate for the past records in exponential moving average""")
-tf.app.flags.DEFINE_integer(ConfigOptions.BATCH_SIZE.value, 16,
+tf.app.flags.DEFINE_integer(ConfigOptions.BATCH_SIZE.value, 4,
                             """Number of samples in a batch""")
 tf.app.flags.DEFINE_float(ConfigOptions.MIN_FRAC_EX_IN_QUEUE.value, 0.4,
                           """"Fraction of samples in a given epoch to be kept in queue for a nice shuffling""")
 tf.app.flags.DEFINE_boolean(ConfigOptions.SHOULD_SHUFFLE.value, True,
                             """"Whether to shuffle samples.""")
 # Configuration options for data feeder
-tf.app.flags.DEFINE_integer("num_epochs", 300,
+tf.app.flags.DEFINE_integer("num_epochs", 400,
                             """"How many times the whole training set has to be fed into network""")
 tf.app.flags.DEFINE_integer("num_threads", 2,
                             """"Number of threads that will enqueue training samples from the sample queue""")
@@ -148,7 +148,7 @@ def train():
             'num_channels': IM_D,
             'frame_size': (IM_H, IM_W),
             'num_classes': 3,  # Steering Angle, Throttle, and Brake
-            'percentile': 0.0  # LSD will be applied to all losses
+            'percentile': 0.1  # LSD will be applied to all losses
         }
         # Create an optimizer
         opt = Momentum(learning_rate=0.001, momentum=0.9)

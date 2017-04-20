@@ -108,11 +108,10 @@ class ModifiedAlexNet(BaseModel):
 
         # Don't use input layer for it adds extra
         # operations which cause trouble for checkpoint saver.
-        network = conv_2d(self.__input_ph,
+        network = conv_2d(super(ModifiedAlexNet, self).input_ph,
                           96, 11, strides=4,
                           activation="relu",
                           scope=self.__layer_names[0],
-                          weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
         network = local_response_normalization(network)
@@ -120,7 +119,6 @@ class ModifiedAlexNet(BaseModel):
                           256, 5,
                           activation="relu",
                           scope=self.__layer_names[1],
-                          weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
         network = local_response_normalization(network)
@@ -128,19 +126,16 @@ class ModifiedAlexNet(BaseModel):
                           384, 3,
                           activation="relu",
                           scope=self.__layer_names[2],
-                          weight_decay=0.0,
                           regularizer='L2')
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
                           scope=self.__layer_names[3],
-                          weight_decay=0.0,
                           regularizer='L2')
         network = conv_2d(network,
                           256, 3,
                           activation="relu",
                           scope=self.__layer_names[4],
-                          weight_decay=0.0,
                           regularizer='L2')
         network = max_pool_2d(network, 3, strides=2)
         network = local_response_normalization(network)
@@ -148,23 +143,19 @@ class ModifiedAlexNet(BaseModel):
                                   4096,
                                   activation="tanh",
                                   scope=self.__layer_names[5],
-                                  weight_decay=0.004,
                                   regularizer='L2')
-        network = dropout(network, 0.5)
+        # network = dropout(network, 0.5)
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
                                   scope=self.__layer_names[6],
-                                  weight_decay=0.004,
                                   regularizer='L2')
-        network = dropout(network, 0.5)
-
+        # network = dropout(network, 0.5)
         if not self.__is_only_features:
             network = fully_connected(network,
                                       self.__num_classes,
                                       activation="linear",
                                       scope=self.__layer_names[7],
-                                      weight_decay=0.0,
                                       regularizer='L2')
 
         self.__network = network
@@ -175,7 +166,7 @@ class ModifiedAlexNet(BaseModel):
         if self.__loss:
             return self
 
-        self.__loss = loss_func.huber_m_loss(self.__target_ph,
+        self.__loss = loss_func.huber_m_loss(super(ModifiedAlexNet, self).target_ph,
                                              self.__network,
                                              self.__percentile,
                                              name='actual_loss')

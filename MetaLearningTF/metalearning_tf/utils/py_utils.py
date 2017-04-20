@@ -42,6 +42,11 @@ def is_empty(o):
             return True
         else:
             return False
+    elif isinstance(o, object):
+        if o is None:
+            return True
+        else:
+            return False
     elif not o:
         return True
     return False
