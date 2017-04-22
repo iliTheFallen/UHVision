@@ -106,7 +106,7 @@ def _outputs(out):
     :return: 
     '''
     print((consts.STEERING_ANGLE+": %.4f / " +
-          consts.THROTTLE + ": %.4f" +
+          consts.THROTTLE + ": %.4f / " +
           consts.BRAKE + ": %.4f") % (out[0], out[1], out[2]))
     # TODO: Send the output to GTAV process through network
 

@@ -30,12 +30,12 @@
 import tensorflow as tf
 
 from utils import constants as consts
+from data.base_feeder import BaseFeeder
 
 
-class TFRecordFeeder(object):
+class TFRecordFeeder(BaseFeeder):
 
     # Parameters
-    __num_threads = None
     __fields = None
     __image_size = None
 
@@ -45,13 +45,12 @@ class TFRecordFeeder(object):
     __features = None
 
     def __init__(self,
-                 tf_record_file_name,
                  num_threads,
+                 tf_record_file_name,
                  num_epochs,
                  fields,
                  image_size):
 
-        self.__num_threads = num_threads
         self.__fields = fields
         self.__image_size = image_size
         self.__fields = list(fields)  # Avoid exhaustion
@@ -62,6 +61,7 @@ class TFRecordFeeder(object):
         self.__file_name_queue = tf.train.string_input_producer([tf_record_file_name],
                                                                 num_epochs=num_epochs)
         self.__reader = tf.TFRecordReader()
+        super(TFRecordFeeder, self).__init__(num_threads)
 
     def _read_and_decode(self):
 
@@ -81,46 +81,3 @@ class TFRecordFeeder(object):
                 labels.append(tf.cast(features[name], t))
 
         return image, labels
-
-    def _generate_batch(self,
-                        image,
-                        label,
-                        batch_size,
-                        min_queue_examples,
-                        is_shuffle):
-
-        if is_shuffle:
-            images, labels = tf.train.shuffle_batch(
-                [image, label],
-                batch_size=batch_size,
-                num_threads=self.__num_threads,
-                capacity=min_queue_examples+2*batch_size,
-                min_after_dequeue=min_queue_examples
-            )
-        else:
-            images, labels = tf.train.batch(
-                [image, label],
-                batch_size=batch_size,
-                num_threads=self.__num_threads,
-                capacity=min_queue_examples+2*batch_size
-            )
-        # Display images in the tensorboard visualizer
-        # tf.summary.image('images', images)
-
-        return images, labels
-
-    def inputs(self,
-               batch_size,
-               num_ex_per_epoch,
-               min_frac_ex_in_queue,
-               is_shuffle):
-
-        # Ensure that the shuffling has good mixing properties
-        min_queue_examples = int(num_ex_per_epoch*min_frac_ex_in_queue)
-        # Read examples from the file
-        image, label = self._read_and_decode()
-        return self._generate_batch(image,
-                                    label,
-                                    batch_size,
-                                    min_queue_examples,
-                                    is_shuffle)

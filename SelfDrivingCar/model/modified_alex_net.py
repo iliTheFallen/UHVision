@@ -56,7 +56,7 @@ class ModifiedAlexNet(BaseModel):
     __total_loss = None  # Loss function after adding regularization losses
 
     def __init__(self,
-                 images=None,
+                 inputs=None,
                  labels=None,
                  batch_size=2,
                  num_channels=3,
@@ -92,7 +92,7 @@ class ModifiedAlexNet(BaseModel):
 
         super(ModifiedAlexNet, self).__init__(input_shape,
                                               output_shape,
-                                              inputs=images,
+                                              inputs=inputs,
                                               targets=labels)
 
     def inference(self):
@@ -100,55 +100,61 @@ class ModifiedAlexNet(BaseModel):
         if self.__network:
             return self
 
-        # input_shape does not have the dimension for batch size.
-        # It is specified in training phase. That is why we have
-        # None for the 1st dimension
-        # input_shape.insert(0, None)
         # Building network...
-
         # Don't use input layer for it adds extra
         # operations which cause trouble for checkpoint saver.
+        var_scope = tf.get_variable_scope()
         network = conv_2d(super(ModifiedAlexNet, self).input_ph,
                           96, 11, strides=4,
                           activation="relu",
-                          scope=self.__layer_names[0])
+                          scope=self.__layer_names[0],
+                          reuse=var_scope.reuse)
         network = max_pool_2d(network, 3, strides=2)
         network = local_response_normalization(network)
         network = conv_2d(network,
                           256, 5,
                           activation="relu",
-                          scope=self.__layer_names[1])
+                          scope=self.__layer_names[1],
+                          reuse=var_scope.reuse)
         network = max_pool_2d(network, 3, strides=2)
         network = local_response_normalization(network)
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
-                          scope=self.__layer_names[2])
+                          scope=self.__layer_names[2],
+                          reuse=var_scope.reuse)
         network = conv_2d(network,
                           384, 3,
                           activation="relu",
-                          scope=self.__layer_names[3])
+                          scope=self.__layer_names[3],
+                          reuse=var_scope.reuse)
         network = conv_2d(network,
                           256, 3,
                           activation="relu",
-                          scope=self.__layer_names[4])
+                          scope=self.__layer_names[4],
+                          reuse=var_scope.reuse)
         network = max_pool_2d(network, 3, strides=2)
         network = local_response_normalization(network)
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
-                                  scope=self.__layer_names[5])
-        network = dropout(network, 0.5)
+                                  scope=self.__layer_names[5],
+                                  weight_decay=0.004,
+                                  reuse=var_scope.reuse)
+        # network = dropout(network, 0.5)
         network = fully_connected(network,
                                   4096,
                                   activation="tanh",
-                                  scope=self.__layer_names[6])
-        network = dropout(network, 0.5)
+                                  scope=self.__layer_names[6],
+                                  weight_decay=0.004,
+                                  reuse=var_scope.reuse)
+        # network = dropout(network, 0.5)
         if not self.__is_only_features:
             network = fully_connected(network,
                                       self.__num_classes,
                                       activation="linear",
-                                      scope=self.__layer_names[7])
+                                      scope=self.__layer_names[7],
+                                      reuse=var_scope.reuse)
 
         self.__network = network
         return self

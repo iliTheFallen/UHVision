@@ -34,6 +34,7 @@ from tflearn.config import init_training_mode
 
 from enum import Enum, unique
 
+from data.base_feeder import BaseFeeder
 from utils import constants as consts
 
 FLAGS = tf.flags.FLAGS  # Should already be set in the application
@@ -123,22 +124,30 @@ class ParallelNetRunner(object):
                 raise ValueError('Training mode is enabled; '
                                  'but training directory is not specified!')
 
-    def _tower_ops_training(self):
-        '''
-        Called per GPU. Creates a replica of network on the
-         specified GPU.
-        :param data_feeder: 
-        :return: 
-        '''
-        with tf.device(consts.CPU_NAME+"0"):
-            # Fetch a batch of images and labels from sample source
-            images, labels = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
-                                                       ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
-                                                       ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
-                                                       ConfigOptions.SHOULD_SHUFFLE.get_val())
+    def _prepare_inputs(self):
+
+        inputs, labels = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
+                                                   ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
+                                                   ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
+                                                   ConfigOptions.SHOULD_SHUFFLE.get_val())
+        if ConfigOptions.NUM_GPUS.get_val() > 1:
+            # Split 'inputs' of size BATCH_SIZE among different GPUs.
+            # each slice = int(BATCH_SIZE/NUM_GPUs)
+            inputs_list, labels_list = BaseFeeder.share_input(inputs,
+                                                              labels,
+                                                              ConfigOptions.BATCH_SIZE.get_val(),
+                                                              ConfigOptions.NUM_GPUS.get_val())
+        else:
+            inputs_list = [inputs]
+            labels_list = [labels]
+
+        return inputs_list, labels_list
+
+    def _tower_ops_training(self, inputs, labels):
+
         # Build the network and its loss functions
         # Each op name of any loss function starts with 'tower_i/*'
-        network = self.__network_class(images=images,
+        network = self.__network_class(inputs=inputs,
                                        labels=labels,
                                        **self.__net_kwargs)
         network.inference().loss_func()
@@ -182,15 +191,17 @@ class ParallelNetRunner(object):
                                           [],
                                           initializer=tf.constant_initializer(0),
                                           trainable=False)
+            # Fetch a batch of images and labels from sample source
             tower_grads = []
             loss = None
             # Building network replicas and their corresponding losses on specified # of GPUs
+            inputs_list, labels_list = self._prepare_inputs()
             with tf.variable_scope(tf.get_variable_scope()) as var_scope:
                 for i in range(ConfigOptions.NUM_GPUS.get_val()):
                     with tf.device(consts.GPU_NAME + '%d' % i):
                         with tf.name_scope(consts.TOWER_NAME + '%d' % i):
                             print('Building network replica for GPU:%d...' % i)
-                            loss = self._tower_ops_training()
+                            loss = self._tower_ops_training(inputs_list[i], labels_list[i])
                             # Share all parameters across all GPUs
                             var_scope.reuse_variables()
                             # Add operations to compute gradients on the current GPU
@@ -218,26 +229,22 @@ class ParallelNetRunner(object):
             # Create a saver for the trained model
             self.__saver = tf.train.Saver(tf.global_variables())
 
-    def _tower_ops_testing(self):
+    def _tower_ops_testing(self, inputs):
 
-        with tf.device(consts.CPU_NAME + "0"):
-            images, _ = self.__data_feeder.inputs(ConfigOptions.BATCH_SIZE.get_val(),
-                                                  ConfigOptions.NUM_EX_PER_EPOCH.get_val(),
-                                                  ConfigOptions.MIN_FRAC_EX_IN_QUEUE.get_val(),
-                                                  ConfigOptions.SHOULD_SHUFFLE.get_val())
-        net = self.__network_class(images=images, **self.__net_kwargs)
+        net = self.__network_class(inputs=inputs, **self.__net_kwargs)
         net.inference()
         return net.network
 
     def _build_for_testing(self):
 
         with self.__graph.as_default(), tf.device(consts.CPU_NAME+"0"):
+            inputs_list, _ = self._prepare_inputs()
             self.__test_op = []
             for i in range(ConfigOptions.NUM_GPUS.get_val()):
                 print('Building network on GPU:%d...' % i)
                 with tf.device(consts.GPU_NAME+str(i)):
                     with tf.name_scope(consts.TOWER_NAME + '%d' % i):
-                        self.__test_op.append(self._tower_ops_testing())
+                        self.__test_op.append(self._tower_ops_testing(inputs_list[i]))
             # Restore the moving average version of the learned variables for evaluation
             if hasattr(FLAGS, ConfigOptions.MOVING_AVERAGE_DECAY.value):
                 variable_averages = tf.train.ExponentialMovingAverage(ConfigOptions.MOVING_AVERAGE_DECAY.get_val())
@@ -287,7 +294,8 @@ class ParallelNetRunner(object):
                 # Create Coordinator for managing Queue Threads
                 coord = tf.train.Coordinator()
                 threads = tf.train.start_queue_runners(sess=self.__sess,
-                                                       coord=coord)
+                                                       coord=coord,
+                                                       daemon=False)
                 self.__step = 1
                 try:
                     while not coord.should_stop():

@@ -51,16 +51,16 @@ tf.app.flags.DEFINE_integer(ConfigOptions.NUM_EX_PER_EPOCH.value, 1024,
                             """"Number of samples in an epoch""")
 tf.app.flags.DEFINE_float(ConfigOptions.MOVING_AVERAGE_DECAY.value, 0.9999,
                           """"Decay rate for the past records in exponential moving average""")
-tf.app.flags.DEFINE_integer(ConfigOptions.BATCH_SIZE.value, 4,
+tf.app.flags.DEFINE_integer(ConfigOptions.BATCH_SIZE.value, 64,
                             """Number of samples in a batch""")
 tf.app.flags.DEFINE_float(ConfigOptions.MIN_FRAC_EX_IN_QUEUE.value, 0.4,
                           """"Fraction of samples in a given epoch to be kept in queue for a nice shuffling""")
 tf.app.flags.DEFINE_boolean(ConfigOptions.SHOULD_SHUFFLE.value, True,
                             """"Whether to shuffle samples.""")
 # Configuration options for data feeder
-tf.app.flags.DEFINE_integer("num_epochs", 400,
+tf.app.flags.DEFINE_integer("num_epochs", 100,
                             """"How many times the whole training set has to be fed into network""")
-tf.app.flags.DEFINE_integer("num_threads", 2,
+tf.app.flags.DEFINE_integer("num_threads", 1,
                             """"Number of threads that will enqueue training samples from the sample queue""")
 tf.app.flags.DEFINE_string("tf_record_file_name",
                            '/home/ilithefallen/Documents/phdThesis'
@@ -95,19 +95,13 @@ def prepare_fields():
 
 def _step(runner, summary_writer, summary_op):
 
-    # Fetch a tuple from the queue
-    _, loss_values = runner.sess.run([runner.train_op, runner.loss])
     step = runner.step
-    if step % 10 == 0:
-        loss_format_str = ('%s_loss: %.5f / '
-                           '%s_loss: %.5f / '
-                           '%s_loss: %.5f')
-        print(loss_format_str % (consts.STEERING_ANGLE, loss_values[0],
-                                 consts.THROTTLE, loss_values[1],
-                                 consts.BRAKE, loss_values[2]))
-    if step % 100 == 0:
+    if step % (ConfigOptions.NUM_EX_PER_EPOCH.get_val()/
+                   ConfigOptions.BATCH_SIZE.get_val()) == 0:
         print('Saving Summary & Checkpoint...')
-        summary_str = runner.sess.run(summary_op)
+        _, loss_values, summary_str = runner.sess.run([runner.train_op,
+                                                       runner.loss,
+                                                       summary_op])
         summary_writer.add_summary(summary_str, step)
         checkpoint_path = os.path.join(ConfigOptions.TRAIN_DIR.get_val(),
                                        'model.ckpt')
@@ -115,6 +109,17 @@ def _step(runner, summary_writer, summary_op):
                           checkpoint_path,
                           global_step=step)
         print('Finished...')
+    else:
+        _, loss_values = runner.sess.run([runner.train_op, runner.loss])
+    if step % 4 == 0:
+        loss_format_str = ('step %d: '
+                           '%s_loss: %.5f / '
+                           '%s_loss: %.5f / '
+                           '%s_loss: %.5f')
+        print(loss_format_str % (step,
+                                 consts.STEERING_ANGLE, loss_values[0],
+                                 consts.THROTTLE, loss_values[1],
+                                 consts.BRAKE, loss_values[2]))
 
 
 def attach_summary_writers(runner):
@@ -134,8 +139,8 @@ def train():
         # All operations should be built into the same graph
         # Create data feeder
         # Data feeder has operations pushed into the graph
-        data_feeder = TFRecordFeeder(FLAGS.tf_record_file_name,
-                                     FLAGS.num_threads,
+        data_feeder = TFRecordFeeder(FLAGS.num_threads,
+                                     FLAGS.tf_record_file_name,
                                      FLAGS.num_epochs,
                                      prepare_fields(),
                                      [IM_H, IM_W, IM_D])
