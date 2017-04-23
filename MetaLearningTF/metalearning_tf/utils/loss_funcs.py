@@ -57,8 +57,12 @@ def huber_m_loss(labels_tensor,
     # All losses will be subjected to LSD
     if samp_frac == 0:
         loss = tf.reduce_mean(
-            tf.square(
-                tf.subtract(labels_tensor, preds_tensor)),
+            tf.multiply(
+                0.5,
+                tf.square(
+                    tf.subtract(labels_tensor, preds_tensor)
+                )
+            ),
             name=name,
             axis=0)
         return loss

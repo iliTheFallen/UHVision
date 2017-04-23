@@ -22,26 +22,24 @@
     **********************************************************************************
     Author:   Ilker GURCAN
     Date:     4/8/17
-    File:     mann_cnn
-    Comments: Represents interconnection of two networks : Memory Augmented Neural 
-     Network (MANN) and Convolutional Neural Network (CNN). CNN acts like a feature 
+    File:     mann_cnn_model
+    Comments: Represents interconnection of two networks : Convolutional Neural Network
+     (CNN) and Memory Augmented Neural Network (MANN). CNN acts like a feature 
      extractor; while MANN is the consumer of these extracted features. They are jointly 
      trained.
     **********************************************************************************
 '''
 
-import tensorflow as tf
-
 from model.modified_alex_net import ModifiedAlexNet
 from metalearning_tf.model.base_model import BaseModel
 from metalearning_tf.model.nn_model import NNModel
 from metalearning_tf.utils import py_utils as pu
-from metalearning_tf.utils import loss_funcs
 
 
-class MannCnn(BaseModel):
+class MannCnnModel(BaseModel):
 
     # Configuration options
+    __batch_size = None
     __seq_len = None
     __num_channels = None
     __frame_size = None
@@ -53,11 +51,12 @@ class MannCnn(BaseModel):
     # Used internally by the class
     __mann = None
     __cnn = None
-    __loss = None
+    __whole_network = None
 
     def __init__(self,
                  images=None,
                  labels=None,
+                 batch_size=1,
                  seq_len=80,
                  num_channels=3,
                  frame_size=(300, 400),
@@ -66,6 +65,7 @@ class MannCnn(BaseModel):
                  learning_rate=0.001,
                  momentum=0.9):
 
+        self.__batch_size = batch_size
         self.__seq_len = seq_len
         self.__num_channels = num_channels
         self.__frame_size = frame_size
@@ -74,50 +74,59 @@ class MannCnn(BaseModel):
         self.__learning_rate = learning_rate
         self.__momentum = momentum
 
-        input_size = (1,  # Batch size
+        input_size = (batch_size,  # Batch size
                       self.__frame_size[0],  # Frame Height
                       self.__frame_size[1],  # Frame Width
                       self.__num_channels)
         target_size = (self.__seq_len, self.__num_classes)
-        super(MannCnn, self).__init__(input_size,
-                                      target_size,
-                                      inputs=images,
-                                      targets=labels)
+        super(MannCnnModel, self).__init__(input_size,
+                                           target_size,
+                                           inputs=images,
+                                           targets=labels)
 
     def inference(self):
 
-        if not pu.is_empty(self.__cnn):
+        if not pu.is_empty(self.__whole_network):
             return self
 
-        self.__cnn = ModifiedAlexNet(super(MannCnn, self).input_ph,
-                                     batch_size=1,  # Will feed one sample at a time
+        self.__cnn = ModifiedAlexNet(super(MannCnnModel, self).input_ph,
+                                     batch_size=self.__batch_size,  # Will feed one sample at a time
                                      num_channels=self.__num_channels,
                                      frame_size=self.__frame_size,
                                      num_classes=self.__num_classes,
+                                     percentile=self.__percentile,
+                                     learning_rate=self.__learning_rate,
+                                     momentum=self.__momentum,
                                      is_only_features=True)
         input_to_mann = self.__cnn.inference().network
         self.__mann = NNModel(inputs=input_to_mann,
-                              targets=super(MannCnn, self).target_ph,
+                              targets=super(MannCnnModel, self).target_ph,
                               is_for_regress=True,
-                              batch_size=1,
+                              batch_size=self.__batch_size,
                               seq_len=self.__seq_len,
                               input_size=input_to_mann.get_shape().as_list(),
                               num_classes=self.__num_classes)
         self.__mann.build()
 
+        self.__whole_network = self.__mann.preds
         return self
 
     def loss_func(self):
 
-        self.__loss = loss_funcs.huber_m_loss(super(MannCnn, self).target_ph,
-                                              self.__mann.preds,
-                                              self.__percentile,
-                                              name='loss')
+        return self.__mann.loss_func()
 
     def train_func(self):
-        pass
+
+        return self.__mann.train_func()
 
     @property
     def loss(self):
-        return self.__loss
+        return self.__mann.loss
 
+    @property
+    def train_op(self):
+        return self.__mann.train_op
+
+    @property
+    def network(self):
+        return self.__whole_network
