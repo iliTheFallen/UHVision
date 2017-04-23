@@ -53,15 +53,27 @@ class GTAVDataReader(object):
         self.num_iter = 0
         self.isLast = isLast # Have we seen the last frame of this drive
         self.driveFolder = drive_folder  # IG
+        self.jsonFolder = jsonFolder
+        self.imgFolder = imgFolder
+        self.filePrefix = filePrefix
         # self.driveFolder = input("Enter Data Folder: ")
-        self.jsonPrefix = self.driveFolder + '/' + jsonFolder + '/' + filePrefix
-        self.framePrefix = self.driveFolder + '/' + imgFolder + '/' + filePrefix
+        self.jsonPrefix = None
+        self.framePrefix = None
         self.bufSize = 0 # Current Size of Buffer
         self.lastFrameNo = 0 # Last Frame No Read Into Buffer
         # self.frameBuf = [] # Current List of Image Frames
         # self.dataBuf = [] # Current List of Data Frames
         self.frameBuf = None
         self.dataBuf = None
+        self.fileDict = dict()
+        self.parseListFile()
+        self.fileList = self.fileDict.keys()
+        self.maxDrive = len(self.fileList)
+        print self.maxDrive
+        self.currDrive = -1
+        self.driveStartFrame = 0
+        self.driveEndFrame = 0
+        self.changeDrive()
         # for i in range(episodeSize):
         # self.loadSample()
 
@@ -84,15 +96,51 @@ class GTAVDataReader(object):
         else:
             raise StopIteration()
 
+    def parseListFile(self):
+        listFile = self.driveFolder + '/listFile.txt'
+        fHandle = open(listFile)
+        for line in fHandle:
+            if line.startswith("#"):
+                continue
+            lineLst = (line.strip()).split()
+            self.fileDict[lineLst[0]] = (lineLst[1], lineLst[2]) # Start frame and end frame
+        print self.fileDict
+
+
+    def changeDrive(self):
+        print("Changing Drives")
+        # print("Drive: ", self.currDrive)
+        # print("Drive Path: ", self.jsonPrefix)
+        # print("Last Frame: ", self.lastFrameNo)
+        self.currDrive += 1
+        i = self.currDrive
+        if(i==self.maxDrive):
+            print("No More Data, All Drives Exhausted!")
+            self.isLast = True
+            exit()
+        self.jsonPrefix = self.driveFolder + '/' + self.fileList[i] + \
+                '/' + self.jsonFolder + '/' + self.filePrefix
+        self.framePrefix = self.driveFolder + '/' + self.fileList[i] + \
+                '/' + self.imgFolder + '/' + self.filePrefix
+        self.driveStartFrame = int(self.fileDict[self.fileList[i]][0])
+        self.lastFrameNo = self.driveStartFrame - 1
+        self.driveEndFrame = int(self.fileDict[self.fileList[i]][1])
+
     def loadSample(self):
 
         currFrameNo = self.lastFrameNo + 1
+        if(currFrameNo > self.driveEndFrame):
+            self.changeDrive()
+            self.loadSample()
+            return None
         jsonPath = self.jsonPrefix + str(currFrameNo) + '.json'
         imgPath = self.framePrefix + str(currFrameNo) + '.jpeg'
         try:
             jsonHandle = open(jsonPath)
         except:
-            self.isLast = True
+            # self.isLast = True
+            # This exception clause is to catch any frames that we manually remove from the dataset
+            self.loadSample()
             return None
         jsonData = json.load(jsonHandle)
         jsonHandle.close()
@@ -100,6 +148,8 @@ class GTAVDataReader(object):
         try:
             speed_exists = jsonData['n'][0]['speed']
         except:
+            # print("Drive Path: ", self.jsonPrefix)
+            # print("Last Frame: ", self.lastFrameNo)
             self.loadSample()
             return None
 
@@ -138,10 +188,13 @@ class GTAVDataReader(object):
 #################################
 ########## EXAMPLE USAGE: #######
 # Comment Out For Actual Use
-# x = GTAVDataFeeder(3, 0, False)
-# while(not x.isLast):
-#     a,b = x.next()
-#     print a
-#     print b
-#     g = raw_input("Press Any Key To See Next Buffers, or Ctrl + C to Terminate")
-#     print "Done"
+# GTAVDataReader(episodeSize, max_iter, isLast, folderContainingDrives)
+drivesFolder = '/Users/archer/NTM/Env/Data'
+x = GTAVDataReader(3, 0, False, drivesFolder)
+while(not x.isLast):
+     a,b = x.next()
+     print x.lastFrameNo
+     # print a
+     # print b
+     # g = raw_input("Press Any Key To See Next Buffers, or Ctrl + C to Terminate")
+     # print "Done"
