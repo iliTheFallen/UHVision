@@ -67,7 +67,7 @@ class GTAVDataReader(object):
         self.dataBuf = None
         self.fileDict = dict()
         self.parseListFile()
-        self.fileList = self.fileDict.keys()
+        self.fileList = list(self.fileDict.keys())
         self.maxDrive = len(self.fileList)
         print(self.maxDrive)
         self.currDrive = -1
@@ -189,12 +189,12 @@ class GTAVDataReader(object):
 ########## EXAMPLE USAGE: #######
 # Comment Out For Actual Use
 # GTAVDataReader(episodeSize, max_iter, isLast, folderContainingDrives)
-# drivesFolder = '/Users/archer/NTM/Env/Data'
-# x = GTAVDataReader(3, 0, False, drivesFolder)
-# while(not x.isLast):
-#      a,b = x.next()
-#      print x.lastFrameNo
-     # print a
-     # print b
-     # g = raw_input("Press Any Key To See Next Buffers, or Ctrl + C to Terminate")
-     # print "Done"
+#drivesFolder = '/Users/archer/NTM/Env/Data'
+#x = GTAVDataReader(3, 0, False, drivesFolder)
+#while(not x.isLast):
+#    a,b = x.next()
+#    print x.lastFrameNo
+#    # print a
+#    # print b
+#    g = raw_input("Press Any Key To See Next Buffers, or Ctrl + C to Terminate")
+#    print "Done"
