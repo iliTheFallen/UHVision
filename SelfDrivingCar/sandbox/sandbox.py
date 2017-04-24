@@ -63,7 +63,7 @@ def test_huber_m_cost():
 def convert_to_tf_record():
 
     reader = GTAVDataReader(episodeSize=1,
-                            max_iter=13056,
+                            max_iter=0,
                             drive_folder=
                             '/home/ilithefallen/Documents/GTAVDrives')
     types = [  # Order matters
@@ -81,7 +81,7 @@ def convert_to_tf_record():
                                   '/UHVision/SelfDrivingCar/samples',
                                   'gtav_training',
                                   zip(names, types))
-    converter.convert(1024, im_size=(300, 400))
+    converter.convert(13056, im_size=(300, 400))
 
 
 def test_parallel_data_feeder():
@@ -107,7 +107,7 @@ def test_parallel_data_feeder():
                                  1,
                                  _prepare_fields(),
                                  [300, 400, 3])
-    images, labels = data_feeder.inputs(16, 1024, 0.4, True)
+    images, labels = data_feeder.inputs(64, 13056, 0.4, True)
     init = tf.group(tf.global_variables_initializer(),
                     tf.local_variables_initializer())
     with tf.device("/gpu:0"):

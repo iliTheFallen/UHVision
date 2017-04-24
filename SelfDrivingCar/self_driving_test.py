@@ -140,8 +140,7 @@ def test():
     global gtav_reader
     global count
     gtav_reader = GTAVDataReader(
-        drive_folder='/home/ilithefallen/Documents/phdThesis' 
-                     '/UHVision/SelfDrivingCar/DriveXbox1')
+        drive_folder='/home/ilithefallen/Documents/GTAVDrives')
     count = 0
     with tf.Graph().as_default():
         # Build the model

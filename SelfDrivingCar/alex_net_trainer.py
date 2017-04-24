@@ -47,7 +47,7 @@ tf.app.flags.DEFINE_string(ConfigOptions.TRAIN_DIR.value, './alexnet_train',
                            """"Directory in where logs and checkpoints are stored""")
 tf.app.flags.DEFINE_integer(ConfigOptions.NUM_GPUS.value, 4,
                             """"Number of GPUs to be used for training""")
-tf.app.flags.DEFINE_integer(ConfigOptions.NUM_EX_PER_EPOCH.value, 1024,
+tf.app.flags.DEFINE_integer(ConfigOptions.NUM_EX_PER_EPOCH.value, 13056,
                             """"Number of samples in an epoch""")
 tf.app.flags.DEFINE_float(ConfigOptions.MOVING_AVERAGE_DECAY.value, 0.9999,
                           """"Decay rate for the past records in exponential moving average""")
@@ -58,13 +58,13 @@ tf.app.flags.DEFINE_float(ConfigOptions.MIN_FRAC_EX_IN_QUEUE.value, 0.4,
 tf.app.flags.DEFINE_boolean(ConfigOptions.SHOULD_SHUFFLE.value, True,
                             """"Whether to shuffle samples.""")
 # Configuration options for data feeder
-tf.app.flags.DEFINE_integer("num_epochs", 100,
+tf.app.flags.DEFINE_integer("num_epochs", 50,
                             """"How many times the whole training set has to be fed into network""")
 tf.app.flags.DEFINE_integer("num_threads", 1,
                             """"Number of threads that will enqueue training samples from the sample queue""")
 tf.app.flags.DEFINE_string("tf_record_file_name",
                            '/home/ilithefallen/Documents/phdThesis'
-                           '/UHVision/SelfDrivingCar/DriveXbox1'
+                           '/UHVision/SelfDrivingCar/samples'
                            '/gtav_training.tfrecords',
                            """"Native TF file where training samples are stored""")
 # Configuration options for the session
