@@ -69,7 +69,7 @@ class GTAVDataReader(object):
         self.parseListFile()
         self.fileList = self.fileDict.keys()
         self.maxDrive = len(self.fileList)
-        print self.maxDrive
+        print(self.maxDrive)
         self.currDrive = -1
         self.driveStartFrame = 0
         self.driveEndFrame = 0
@@ -104,7 +104,7 @@ class GTAVDataReader(object):
                 continue
             lineLst = (line.strip()).split()
             self.fileDict[lineLst[0]] = (lineLst[1], lineLst[2]) # Start frame and end frame
-        print self.fileDict
+        print(self.fileDict)
 
 
     def changeDrive(self):
@@ -189,11 +189,11 @@ class GTAVDataReader(object):
 ########## EXAMPLE USAGE: #######
 # Comment Out For Actual Use
 # GTAVDataReader(episodeSize, max_iter, isLast, folderContainingDrives)
-drivesFolder = '/Users/archer/NTM/Env/Data'
-x = GTAVDataReader(3, 0, False, drivesFolder)
-while(not x.isLast):
-     a,b = x.next()
-     print x.lastFrameNo
+# drivesFolder = '/Users/archer/NTM/Env/Data'
+# x = GTAVDataReader(3, 0, False, drivesFolder)
+# while(not x.isLast):
+#      a,b = x.next()
+#      print x.lastFrameNo
      # print a
      # print b
      # g = raw_input("Press Any Key To See Next Buffers, or Ctrl + C to Terminate")

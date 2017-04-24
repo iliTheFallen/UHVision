@@ -34,7 +34,7 @@ from PIL import Image
 from data.convert_to_tf_record import ConvertToTFRecord
 from data.gtav_data_reader import GTAVDataReader
 from data.tf_record_feeder import TFRecordFeeder
-from utils import loss_funcs as loss
+from metalearning_tf.utils import loss_funcs
 from utils import constants as consts
 
 
@@ -50,7 +50,7 @@ def test_huber_m_cost():
               [5, 8],
               [13, 8]]
     labels = tf.constant(labels, dtype=tf.float32, name="labels")
-    loss_tensor = loss.huber_m_loss(labels, targets, 0.5)
+    loss_tensor = loss_funcs.huber_m_loss(labels, targets, 0.5)
 
     init = tf.global_variables_initializer()
     with tf.Graph().as_default(), tf.device("/gpu:0"):
@@ -62,9 +62,10 @@ def test_huber_m_cost():
 
 def convert_to_tf_record():
 
-    reader = GTAVDataReader(drive_folder=
-                            '/home/ilithefallen/Documents/phdThesis'
-                            '/UHVision/SelfDrivingCar/DriveXbox1')
+    reader = GTAVDataReader(episodeSize=1,
+                            max_iter=13056,
+                            drive_folder=
+                            '/home/ilithefallen/Documents/GTAVDrives')
     types = [  # Order matters
         tf.float32,
         tf.float32,
@@ -77,7 +78,7 @@ def convert_to_tf_record():
     ]
     converter = ConvertToTFRecord(reader,
                                   '/home/ilithefallen/Documents/phdThesis'
-                                  '/UHVision/SelfDrivingCar/DriveXbox1',
+                                  '/UHVision/SelfDrivingCar/samples',
                                   'gtav_training',
                                   zip(names, types))
     converter.convert(1024, im_size=(300, 400))
