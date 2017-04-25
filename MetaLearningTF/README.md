@@ -1,5 +1,8 @@
 For a fresh installation of metalearning-tf package
 
+Go into the UHVision/MetaLearningTF/ Directory
+cd MetaLearningTF/
+
 Step 1:
 python setup.py build
 
