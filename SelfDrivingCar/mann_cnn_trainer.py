@@ -28,7 +28,6 @@
 '''
 
 
-
 import tensorflow as tf
 from tflearn.optimizers import Momentum
 
@@ -39,7 +38,7 @@ from model.mann_cnn_model import MannCnnModel
 from utils.parallel_net_runner import ConfigOptions
 from utils.parallel_net_runner import ParallelNetRunner
 from utils import constants as consts
-from data.tf_record_feeder import TFRecordFeeder
+from data.tf_seq_rec_feeder import TFSeqRecFeeder
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -65,8 +64,8 @@ tf.app.flags.DEFINE_integer("num_threads", 1,
                             """"Number of threads that will enqueue training samples from the sample queue""")
 tf.app.flags.DEFINE_string("tf_record_file_name",
                            '/home/ilithefallen/Documents/phdThesis'
-                           '/UHVision/SelfDrivingCar/DriveXbox1'
-                           '/gtav_training.tfrecords',
+                           '/UHVision/SelfDrivingCar/samples'
+                           '/gtav_seq_training.tfrecords',
                            """"Native TF file where training samples are stored""")
 # Configuration options for the session
 tf.app.flags.DEFINE_boolean("log_device_placement", False,
@@ -75,23 +74,6 @@ tf.app.flags.DEFINE_boolean("log_device_placement", False,
 IM_W = 400
 IM_H = 300
 IM_D = 3
-
-
-def prepare_fields():
-
-    types = [  # Order matters
-        tf.string,
-        tf.float32,
-        tf.float32,
-        tf.float32
-    ]
-    names = [  # Order matters
-        consts.IMAGE_RAW,
-        consts.STEERING_ANGLE,
-        consts.THROTTLE,
-        consts.BRAKE
-    ]
-    return zip(names, types)
 
 
 def _step(runner, summary_writer, summary_op):
@@ -135,23 +117,30 @@ def attach_summary_writers(runner):
 
 def train():
 
+    label_fields = [
+        consts.STEERING_ANGLE,
+        consts.THROTTLE,
+        consts.BRAKE
+    ]
     graph = tf.Graph()
     with graph.as_default():
         # All operations should be built into the same graph
         # Create data feeder
         # Data feeder has operations pushed into the graph
-        data_feeder = TFRecordFeeder(FLAGS.num_threads,
+        data_feeder = TFSeqRecFeeder(FLAGS.num_threads,
                                      FLAGS.tf_record_file_name,
                                      FLAGS.num_epochs,
-                                     prepare_fields(),
-                                     [IM_H, IM_W, IM_D])
+                                     label_fields,
+                                     [tf.string, tf.float32],
+                                     [IM_H, IM_W, IM_D],
+                                     80)
         # Specify session configuration options
         sess_config = tf.ConfigProto()
         sess_config.log_device_placement = FLAGS.log_device_placement
         # Network class' arguments (ModifiedAlexNet)
         net_kwargs = {
             'batch_size': ConfigOptions.BATCH_SIZE.get_val(),
-            'seq_len' : 80,
+            'seq_len': 80,
             'num_channels': IM_D,
             'frame_size': (IM_H, IM_W),
             'num_classes': 3,  # Steering Angle, Throttle, and Brake

@@ -24,16 +24,19 @@
     Date:     4/9/17
     File:     convert_to_tf_record
     Comments: Converts image+label data to TFRecords file format with Example protos.
+     Each sample is assumed to have one set of labels and a corresponding single frame.
     **********************************************************************************
 '''
 
 import tensorflow as tf
 
 import os
+import numpy as np
 from scipy.misc import imresize
 
 
 from utils import constants as consts
+from metalearning_tf.utils import py_utils as pu
 
 
 class ConvertToTFRecord(object):
@@ -41,13 +44,15 @@ class ConvertToTFRecord(object):
     __reader = None
     __out_folder = None
     __out_file = None
-    __fields = None
+    __label_fields = None
+    __label_type = None
 
     def __init__(self,
                  reader,
                  out_folder,
                  out_file,
-                 fields):
+                 label_fields,
+                 label_type):
 
         if not hasattr(reader, '__iter__') or not hasattr(reader, 'reset'):
             raise ValueError('Invalid Reader!')
@@ -55,35 +60,63 @@ class ConvertToTFRecord(object):
         self.__reader = reader
         self.__out_folder = out_folder
         self.__out_file = out_file
-        self.__fields = list(fields)  # Avoid exhaustion
+        self.__label_fields = label_fields
+        self.__label_type = label_type
 
     @staticmethod
-    def _int64_feature(value):
-        return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+    def _int64_feature(values):
+        return tf.train.Feature(int64_list=tf.train.Int64List(value=values))
 
     @staticmethod
-    def _bytes_feature(value):
-        return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+    def _bytes_feature(values):
+        return tf.train.Feature(bytes_list=tf.train.BytesList(value=values))
 
     @staticmethod
-    def _float_feature(value):
-        return tf.train.Feature(float_list=tf.train.FloatList(value=[value]))
+    def _float_feature(values):
+        return tf.train.Feature(float_list=tf.train.FloatList(value=values))
 
-    def _prepare_features_map(self, frame, label):
+    def _prepare_features_map(self, frames, labels):
 
         features = {}
         i = 0
-        for (key, value) in self.__fields:
-            if value == tf.uint8:
-                features[key] = ConvertToTFRecord._bytes_feature(label[i])
-            elif value == tf.int64:
-                features[key] = ConvertToTFRecord._int64_feature(label[i])
+
+        for name in self.__label_fields:
+            val = [labels[i]] if not pu.is_arr(labels[i]) else labels[i]
+            if self.__label_type == tf.uint8:
+                features[name] = ConvertToTFRecord._bytes_feature(val)
+            elif self.__label_type == tf.int64:
+                features[name] = ConvertToTFRecord._int64_feature(val)
             else:
-                features[key] = ConvertToTFRecord._float_feature(label[i])
+                features[name] = ConvertToTFRecord._float_feature(val)
             i += 1
         # Finally append our raw image data to our feature map
-        features[consts.IMAGE_RAW] = ConvertToTFRecord._bytes_feature(frame.tostring())
+        if not isinstance(frames, list):
+            features[consts.IMAGE_RAW] = ConvertToTFRecord._bytes_feature([frames.tostring()])
+        else:
+            features[consts.IMAGE_RAW] = ConvertToTFRecord._bytes_feature([np.array(frames).tostring()])
+
         return features
+
+    def _write_to_tf(self,
+                     writer,
+                     max_num_records,
+                     im_size):
+
+        num_tuples = 0
+        for (frame, label) in self.__reader:
+            if im_size != frame.shape[0:2]:
+                # Reconstruction sampling (sinc function first greater lobes interpolation)
+                new_frame = imresize(frame, size=im_size, interp='lanczos')
+            else:
+                new_frame = frame
+            features = self._prepare_features_map(new_frame, label.tolist())
+            example = tf.train.Example(features=tf.train.Features(feature=features))
+            writer.write(example.SerializeToString())
+            num_tuples += 1
+            if max_num_records > 0 and num_tuples == max_num_records:
+                break
+
+        return num_tuples
 
     def convert(self,
                 max_num_records,
@@ -106,21 +139,19 @@ class ConvertToTFRecord(object):
         self.__reader.reset()
         print('Writing records into %s' % file_name)
         writer = tf.python_io.TFRecordWriter(file_name)
-        num_tuples = 0
-        for (frame, label) in self.__reader:
-            if im_size != frame.shape[0:2]:
-                # Reconstruction sampling (sinc function first greater lobes interpolation)
-                new_frame = imresize(frame, size=im_size, interp='lanczos')
-            else:
-                new_frame = frame
-            features = self._prepare_features_map(new_frame, label.tolist())
-            example = tf.train.Example(features=tf.train.Features(feature=features))
-            writer.write(example.SerializeToString())
-            num_tuples += 1
-            if max_num_records > 0 and num_tuples == max_num_records:
-                break
+        num_tuples = self._write_to_tf(writer,
+                                       max_num_records,
+                                       im_size)
         writer.close()
         print('Total number of tuples written: %d' % num_tuples)
+
+    @property
+    def reader(self):
+        return self.__reader
+
+    @property
+    def fields(self):
+        return self.__label_fields
 
 
 

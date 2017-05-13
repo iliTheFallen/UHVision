@@ -76,23 +76,6 @@ IM_H = 300
 IM_D = 3
 
 
-def prepare_fields():
-
-    types = [  # Order matters
-        tf.string,
-        tf.float32,
-        tf.float32,
-        tf.float32
-    ]
-    names = [  # Order matters
-        consts.IMAGE_RAW,
-        consts.STEERING_ANGLE,
-        consts.THROTTLE,
-        consts.BRAKE
-    ]
-    return zip(names, types)
-
-
 def _step(runner, summary_writer, summary_op):
 
     step = runner.step
@@ -134,6 +117,11 @@ def attach_summary_writers(runner):
 
 def train():
 
+    label_fields = [
+        consts.STEERING_ANGLE,
+        consts.THROTTLE,
+        consts.BRAKE
+    ]
     graph = tf.Graph()
     with graph.as_default():
         # All operations should be built into the same graph
@@ -142,7 +130,8 @@ def train():
         data_feeder = TFRecordFeeder(FLAGS.num_threads,
                                      FLAGS.tf_record_file_name,
                                      FLAGS.num_epochs,
-                                     prepare_fields(),
+                                     label_fields,
+                                     [tf.string, tf.float32],
                                      [IM_H, IM_W, IM_D])
         # Specify session configuration options
         sess_config = tf.ConfigProto()

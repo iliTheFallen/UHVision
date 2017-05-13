@@ -30,6 +30,8 @@
     **********************************************************************************
 '''
 
+import tensorflow as tf
+
 from model.modified_alex_net import ModifiedAlexNet
 from metalearning_tf.model.base_model import BaseModel
 from metalearning_tf.model.nn_model import NNModel
@@ -54,7 +56,7 @@ class MannCnnModel(BaseModel):
     __whole_network = None
 
     def __init__(self,
-                 images=None,
+                 inputs=None,
                  labels=None,
                  batch_size=1,
                  seq_len=80,
@@ -78,10 +80,12 @@ class MannCnnModel(BaseModel):
                       self.__frame_size[0],  # Frame Height
                       self.__frame_size[1],  # Frame Width
                       self.__num_channels)
-        target_size = (self.__seq_len, self.__num_classes)
+        target_size = (batch_size,
+                       self.__seq_len,
+                       self.__num_classes)
         super(MannCnnModel, self).__init__(input_size,
                                            target_size,
-                                           inputs=images,
+                                           inputs=inputs,
                                            targets=labels)
 
     def inference(self):
@@ -89,25 +93,34 @@ class MannCnnModel(BaseModel):
         if not pu.is_empty(self.__whole_network):
             return self
 
-        self.__cnn = ModifiedAlexNet(super(MannCnnModel, self).input_ph,
-                                     batch_size=self.__batch_size,  # Will feed one sample at a time
-                                     num_channels=self.__num_channels,
-                                     frame_size=self.__frame_size,
-                                     num_classes=self.__num_classes,
-                                     percentile=self.__percentile,
-                                     learning_rate=self.__learning_rate,
-                                     momentum=self.__momentum,
-                                     is_only_features=True)
-        input_to_mann = self.__cnn.inference().network
+        input_to_mann = []
+        self.__cnn = []
+        input_ = super(MannCnnModel, self).input_ph
+        with tf.variable_scope(tf.get_variable_scope()) as var_scope:
+            for i in range(self.__seq_len):
+                self.__cnn.append(ModifiedAlexNet(
+                    input_[:, i, ...],
+                    batch_size=self.__batch_size,  # Will feed one sample at a time
+                    num_channels=self.__num_channels,
+                    frame_size=self.__frame_size,
+                    num_classes=self.__num_classes,
+                    percentile=self.__percentile,
+                    learning_rate=self.__learning_rate,
+                    momentum=self.__momentum,
+                    is_only_features=True))
+                input_to_mann.append(tf.expand_dims(self.__cnn[i].inference().network, axis=1))
+                var_scope.reuse_variables()
+        input_to_mann = tf.concat(input_to_mann, axis=1)
+        input_to_mann = tf.reshape(input_to_mann, shape=[self.__batch_size, self.__seq_len, -1])
         self.__mann = NNModel(inputs=input_to_mann,
                               targets=super(MannCnnModel, self).target_ph,
                               is_for_regress=True,
                               batch_size=self.__batch_size,
                               seq_len=self.__seq_len,
-                              input_size=input_to_mann.get_shape().as_list(),
+                              input_size=input_to_mann.get_shape().as_list()[2],
                               num_classes=self.__num_classes)
-        self.__mann.build()
-
+        self.__mann.build()  # Create "graph variables" for controller, memory, and the hosting modules
+        self.__mann.inference()  # Create "graph operations" pre-defined for controller, memory, and hosting modules
         self.__whole_network = self.__mann.preds
         return self
 

@@ -50,7 +50,6 @@ def huber_m_loss(labels_tensor,
     :param name: Operation name
     :return: Huber-M Loss tensor
     '''
-    tf.Tensor
     [N, F] = labels_tensor.get_shape().as_list()
     samp_frac = int(round(N*percentile))
 

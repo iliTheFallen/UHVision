@@ -32,8 +32,10 @@ import tensorflow as tf
 from PIL import Image
 
 from data.convert_to_tf_record import ConvertToTFRecord
+from data.convert_to_tf_seq import ConvertToTFSeq
 from data.gtav_data_reader import GTAVDataReader
 from data.tf_record_feeder import TFRecordFeeder
+from data.tf_seq_rec_feeder import TFSeqRecFeeder
 from metalearning_tf.utils import loss_funcs
 from utils import constants as consts
 
@@ -66,12 +68,7 @@ def convert_to_tf_record():
                             max_iter=0,
                             drive_folder=
                             '/home/ilithefallen/Documents/GTAVDrives')
-    types = [  # Order matters
-        tf.float32,
-        tf.float32,
-        tf.float32
-    ]
-    names = [  # Order matters
+    names = [
         consts.STEERING_ANGLE,
         consts.THROTTLE,
         consts.BRAKE
@@ -80,37 +77,50 @@ def convert_to_tf_record():
                                   '/home/ilithefallen/Documents/phdThesis'
                                   '/UHVision/SelfDrivingCar/samples',
                                   'gtav_training',
-                                  zip(names, types))
+                                  names,
+                                  tf.float32)
     converter.convert(13056, im_size=(300, 400))
+
+
+def convert_to_tf_seq_record():
+    reader = GTAVDataReader(episodeSize=1,
+                            max_iter=0,
+                            drive_folder=
+                            '/home/ilithefallen/Documents/GTAVDrives')
+    names = [
+        consts.STEERING_ANGLE,
+        consts.THROTTLE,
+        consts.BRAKE
+    ]
+    converter = ConvertToTFSeq(reader,
+                               '/home/ilithefallen/Documents/phdThesis'
+                               '/UHVision/SelfDrivingCar/samples',
+                               'gtav_seq_training',
+                               names,
+                               tf.float32,
+                               80)
+    converter.convert(-1, im_size=(300, 400))
 
 
 def test_parallel_data_feeder():
 
-    def _prepare_fields():
-        types = [  # Order matters
-            tf.string,
-            tf.float32,
-            tf.float32,
-            tf.float32
-        ]
-        names = [  # Order matters
-            consts.IMAGE_RAW,
-            consts.STEERING_ANGLE,
-            consts.THROTTLE,
-            consts.BRAKE
-        ]
-        return zip(names, types)
-    data_feeder = TFRecordFeeder('/home/ilithefallen/Documents/phdThesis'
-                                 '/UHVision/SelfDrivingCar/DriveXbox1'
+    names = [
+        consts.STEERING_ANGLE,
+        consts.THROTTLE,
+        consts.BRAKE
+    ]
+    data_feeder = TFRecordFeeder(2,
+                                 '/home/ilithefallen/Documents/phdThesis'
+                                 '/UHVision/SelfDrivingCar/samples'
                                  '/gtav_training.tfrecords',
-                                 2,
                                  1,
-                                 _prepare_fields(),
+                                 names,
+                                 tf.float32,
                                  [300, 400, 3])
     images, labels = data_feeder.inputs(64, 13056, 0.4, True)
     init = tf.group(tf.global_variables_initializer(),
                     tf.local_variables_initializer())
-    with tf.device("/gpu:0"):
+    with tf.device("/cpu:0"):
         with tf.Session() as sess:
             sess.run(init)
             # Start input enqueue threads for reading input data using 'parallel data feeder' mechanism
@@ -136,6 +146,52 @@ def test_parallel_data_feeder():
             coord.join(threads)
 
 
+def test_seq_rec_feeder():
+
+    names = [
+        consts.STEERING_ANGLE,
+        consts.THROTTLE,
+        consts.BRAKE
+    ]
+    data_feeder = TFSeqRecFeeder(1,
+                                 '/home/ilithefallen/Documents/phdThesis'
+                                 '/UHVision/SelfDrivingCar/samples'
+                                 '/gtav_seq_training.tfrecords',
+                                 1,
+                                 names,
+                                 [tf.string, tf.float32],
+                                 [300, 400, 3],
+                                 80)
+    images, labels, labels2 = data_feeder.inputs(1, 13110, 0.4, True)
+    init = tf.group(tf.global_variables_initializer(),
+                    tf.local_variables_initializer())
+    with tf.device("/cpu:0"):
+        with tf.Session() as sess:
+            sess.run(init)
+            # Start input enqueue threads for reading input data using 'parallel data feeder' mechanism
+            coord = tf.train.Coordinator()
+            threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+            step = 0
+            try:
+                while not coord.should_stop():
+                    la_out = sess.run(labels)
+                    deneme = sess.run(labels2)
+                    # num_im = im_out.shape[0]
+                    # for i in range(num_im):
+                    #     image = Image.fromarray(im_out[i, :, :, :], 'RGB')
+                    #     image.show()
+                    step += 1
+            except tf.errors.OutOfRangeError:
+                print('Done reading for %d steps.' % (step))
+            except KeyboardInterrupt:
+                print('Done reading for %d steps.' % (step))
+            finally:
+                # When done, ask all threads to stop
+                coord.request_stop()
+            # Wait for threads to finish
+            coord.join(threads)
+
+
 def func1(name, soft_id):
 
     print('Name %s / SoftId: %d' % (name, soft_id))
@@ -148,6 +204,8 @@ def pack_unpack(**kwargs):
 
 if __name__ == "__main__":
     # test_huber_m_cost()
-    convert_to_tf_record()
+    # convert_to_tf_record()
+    # convert_to_tf_seq_record()
+    test_seq_rec_feeder()
     # test_parallel_data_feeder()
     # pack_unpack(name='Ilker GURCAN', soft_id=1456789)

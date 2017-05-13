@@ -50,3 +50,11 @@ def is_empty(o):
     elif not o:
         return True
     return False
+
+
+def is_arr(o):
+
+    if isinstance(o, np.ndarray) or isinstance(o, list):
+        return True
+    else:
+        return False

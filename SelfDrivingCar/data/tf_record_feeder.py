@@ -36,7 +36,7 @@ from data.base_feeder import BaseFeeder
 class TFRecordFeeder(BaseFeeder):
 
     # Parameters
-    __fields = None
+    __label_fields = None
     __image_size = None
 
     # Fields used by the class internally
@@ -48,20 +48,28 @@ class TFRecordFeeder(BaseFeeder):
                  num_threads,
                  tf_record_file_name,
                  num_epochs,
-                 fields,
+                 label_fields,
+                 dtypes,  # [0]: image type / [1]: label type
                  image_size):
 
-        self.__fields = fields
+        self.__label_fields = label_fields
+        self.__dtypes = dtypes
         self.__image_size = image_size
-        self.__fields = list(fields)  # Avoid exhaustion
-
-        self.__features = {}
-        for (name, t) in self.__fields:
-            self.__features[name] = tf.FixedLenFeature([], t)
         self.__file_name_queue = tf.train.string_input_producer([tf_record_file_name],
                                                                 num_epochs=num_epochs)
         self.__reader = tf.TFRecordReader()
+        self.__features = self._create_features()
         super(TFRecordFeeder, self).__init__(num_threads)
+
+    def _create_features(self):
+
+        features = {
+            consts.IMAGE_RAW: tf.FixedLenFeature([], self.__dtypes[0])
+        }
+        # Each label is a scalar with a type of 'dtypes[1]'
+        for name in self.__label_fields:
+            features[name] = tf.FixedLenFeature([], self.__dtypes[1])
+        return features
 
     def _read_and_decode(self):
 
@@ -76,8 +84,32 @@ class TFRecordFeeder(BaseFeeder):
                                         tf.constant(1.0/255.0)),
                             tf.constant(0.5))
         labels = []
-        for (name, t) in self.__fields:
+        for name in self.__label_fields:
             if name != consts.IMAGE_RAW:
-                labels.append(tf.cast(features[name], t))
+                labels.append(tf.cast(features[name], self.__dtypes[1]))
 
         return image, labels
+
+    @property
+    def label_fields(self):
+        return self.__label_fields
+
+    @property
+    def dtypes(self):
+        return self.__dtypes
+
+    @property
+    def image_size(self):
+        return self.__image_size
+
+    @property
+    def file_name_queue(self):
+        return self.__file_name_queue
+
+    @property
+    def reader(self):
+        return self.__reader
+
+    @property
+    def features(self):
+        return self.__features

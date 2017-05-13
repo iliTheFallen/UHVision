@@ -107,13 +107,12 @@ class NNModel(BaseModel):
                          self.__seq_len,
                          input_size)
         input_type = tf.float32
+        target_size = (self.__batch_size,
+                       self.__seq_len,
+                       self.__num_classes)
         if is_for_regress:
-            target_size = (self.__batch_size,
-                           self.__seq_len,
-                           self.__num_classes)
             target_type = tf.float32
         else:
-            target_size = (self.__batch_size, self.__seq_len)
             target_type = tf.int32
         super(NNModel, self).__init__(input_ph_size,
                                       target_size,
@@ -253,7 +252,7 @@ class NNModel(BaseModel):
                         b_o)  # BSxSLx(num_classes)
         preds = tf.reshape(preact, out_shape)  # (BS.SL)x(num_classes)
 
-        self.__labels = labels if self.__is_for_regress else tf.reshape(labels, [-1])
+        self.__labels = tf.reshape(labels, out_shape) if self.__is_for_regress else tf.reshape(labels, [-1])
         self.__preds = preds  # NEVER EVER APPLY SOFT-MAX FOR IT WILL BE APPLIED WHEN LOSS FUNCTION IS DEFINED
         return self
 

@@ -78,6 +78,12 @@ class BaseFeeder(object):
 
         return images, labels
 
+    def before_step(self, sess):
+        pass
+
+    def after_step(self, sess):
+        pass
+
     def inputs(self,
                batch_size,
                num_ex_per_epoch,

@@ -117,7 +117,7 @@ class GTAVDataReader(object):
         if(i==self.maxDrive):
             print("No More Data, All Drives Exhausted!")
             self.isLast = True
-            exit()
+            raise StopIteration()
         self.jsonPrefix = self.driveFolder + '/' + self.fileList[i] + \
                 '/' + self.jsonFolder + '/' + self.filePrefix
         self.framePrefix = self.driveFolder + '/' + self.fileList[i] + \
