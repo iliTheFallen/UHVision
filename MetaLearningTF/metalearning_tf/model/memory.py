@@ -30,10 +30,11 @@
 '''
 
 import tensorflow as tf
-import numpy as np
-from metalearning_tf.utils import tf_utils
 
-import metalearning_tf.utils.similarity_measures as sim_utils
+import numpy as np
+
+from hula_commons.utils import tf_utils
+import hula_commons.utils.similarity_measures as sim_utils
 
 
 class MemoryUnit(object):

@@ -31,11 +31,12 @@
 
 import tensorflow as tf
 
-from metalearning_tf.model.base_model import BaseModel
+from hula_commons.model.base_model import BaseModel
+from hula_commons.utils import loss_funcs
+from hula_commons.utils import tf_utils
+
 from metalearning_tf.model.memory import MemoryUnit
 from metalearning_tf.model.controller_unit import ControllerUnit
-from metalearning_tf.utils import loss_funcs
-import metalearning_tf.utils.tf_utils as tf_utils
 
 
 class NNModel(BaseModel):

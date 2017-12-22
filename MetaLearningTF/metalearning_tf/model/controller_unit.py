@@ -29,7 +29,7 @@
 
 import tensorflow as tf
 
-import metalearning_tf.utils.tf_utils as tf_utils
+from hula_commons.utils import tf_utils
 
 
 class ControllerUnit(object):
